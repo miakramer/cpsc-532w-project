@@ -203,10 +203,21 @@ impl DistributionType {
 
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Distribution {
-    pub distribution: DistributionType,
-    pub arguments: Vec<Primitive>,
-}
+pub enum Distribution {
+    Dirac{center: f64},
+    Kronecker{center: i128},
+    UniformContinuous{a: f64, b: f64},
+    UniformDiscrete{a: i128, b: i128},
+    Caregorical{weights: Array1<f32>},
+    Normal{mu: f64, sigma: f64},
+    Cauchy{median: f64, scale: f64},
+    Beta{alpha: f64, beta: f64},
+    Dirichlet{weights: Array1<f32>},
+    Exponential{lambda: f64},
+    Gamma{shape: f64, rate: f64},
+    Bernoulli{p: f64},
+    Binomial{n: u64, p: f64},
+} 
 
 
 const LAMBDA_ARGS_DEFAULT: usize = 4;
@@ -221,9 +232,8 @@ pub enum Primitive {
     Vector(Vector<Primitive>),
     HashMap(PHashMap),
     Distribution(Distribution),
-    DistributionType(DistributionType),
     Builtin(Builtin),
-    Observed,
+    Observed, // ?
     // optimizations
     EvaluatedVector(Array1<f64>),
 }
@@ -256,9 +266,9 @@ impl PartialEq for Primitive {
             Self::HashMap(l) => {
                 if let Self::HashMap(r) = other { l == r} else { false }
             }
-            Self::DistributionType(l) => {
-                if let Self::DistributionType(r) = other { l == r} else { false }
-            }
+            // Self::DistributionType(l) => {
+            //     if let Self::DistributionType(r) = other { l == r} else { false }
+            // }
             Self::Distribution(l) => {
                 if let Self::Distribution(r) = other { l == r} else { false }
             }
@@ -327,7 +337,7 @@ _primfrom!(Primitive::EvaluatedVector, Array1<f64>);
 _primfrom!(Primitive::Boolean, bool);
 _primfrom!(Primitive::Builtin, Builtin);
 _primfrom!(Primitive::Distribution, Distribution);
-_primfrom!(Primitive::DistributionType, DistributionType);
+// _primfrom!(Primitive::DistributionType, DistributionType);
 
 impl From<&str> for Primitive {
     fn from(s: &str) -> Self {
@@ -355,8 +365,6 @@ impl<T : Copy + AsPrimitive<f64> + Float> From<Vec<T>> for Primitive {
 //         (*t).into()
 //     }
 // }
-
-// impl From<Builtin> for Primi
 
 impl From<&serde_json::Number> for Primitive {
     fn from(n: &serde_json::Number) -> Primitive {
@@ -557,6 +565,17 @@ impl TryFrom<Primitive> for bool {
     }
 }
 
+impl TryFrom<&Primitive> for Array1<f32> {
+    type Error = PrimitiveError;
+
+    fn try_from(p: &Primitive) -> Result<Self, Self::Error> {
+        match p {
+            Primitive::EvaluatedVector(v) => Ok(v.mapv(|x| x as f32)),
+            _ => Err(PrimitiveError::CannotConvert),
+        }
+    }
+}
+
 pub fn integral_pair(p1: &Primitive, p2: &Primitive) -> Option<(i128, i128)> {
     let l = match p1 {
         Primitive::Int(i) => *i,
@@ -591,14 +610,14 @@ impl Primitive {
             Primitive::Float(f) => print!("{}{}", f, Green.paint("::Float")),
             Primitive::Boolean(b) => print!("{}{}", b, Green.paint("::Boolean")),
             Primitive::Builtin(b) => print!("{}{}", b.name(), Green.paint("::Builtin")),
-            Primitive::DistributionType(d) => print!("{:?}{}", d, Green.paint("::DistributionType")),
+            // Primitive::DistributionType(d) => print!("{:?}{}", d, Green.paint("::DistributionType")),
             Primitive::Distribution(d) => {
-                print!("({}", d.distribution.name());
-                for arg in &d.arguments {
-                    print!(" ");
-                    arg.pretty_print(indentation);
-                }
-                print!("){}", Green.paint("::Distribution"))
+                // print!("({}", d.distribution.name());
+                // for arg in &d.arguments {
+                //     print!(" ");
+                //     arg.pretty_print(indentation);
+                // }
+                // print!("){}", Green.paint("::Distribution"))
             },
             Primitive::Vector(v) => {
                 print!("[");

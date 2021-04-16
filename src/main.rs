@@ -4,7 +4,8 @@ pub mod expression;
 pub mod primitive;
 pub mod eqmap;
 mod utilities;
-
+pub mod tree;
+pub mod distribution;
 
 pub mod common {
     use smol_str::SmolStr;
