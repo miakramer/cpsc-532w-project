@@ -4,9 +4,9 @@
 extern crate nom;
 pub mod parser;
 pub mod desugar;
+pub mod graph;
 
 use nom::error::VerboseError;
-use parser::*;
 
 fn prettyprint<'a, T : std::fmt::Debug>(i: &'static str, val: nom::IResult<&'a str, T, VerboseError<&str>>) {
     match val {
@@ -24,9 +24,13 @@ fn prettyprint<'a, T : std::fmt::Debug>(i: &'static str, val: nom::IResult<&'a s
 pub fn main() {
     let prog1 = r#"
     (proclaim-threshold 0.8)
-    (let [d (decision (one-of 1 2))
+    (defn f [x] (+ x 2))
+    (defn g [x] (- x (f x)))
+    (let [d (decision (one-of 1 (f 1)))
           dist (normal 1 1.5)
-          val (sample dist)]
+          val (sample dist)
+          x 5
+          _ (+ 2 (g 3))]
         (constrain = val dist))
     "#;
 
@@ -45,10 +49,10 @@ pub fn main() {
     let desugared = match desugar::desugar(&parsed) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("{:?}", e);
+            eprintln!("Error while desugaring: {:?}", e);
             std::process::exit(2);
         }
     };
 
-    println!("{:?}", desugared);
+    desugar::pretty_print(&desugared.body);
 }
