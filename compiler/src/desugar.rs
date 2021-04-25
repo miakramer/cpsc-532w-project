@@ -135,7 +135,11 @@ fn ident(source: &parser::Identifier, state: &mut u32) -> Identifier {
                 let mut br = &mut buf[..];
                 write!(br, "${}", state).unwrap();
             }
-            let s = std::str::from_utf8(&buf[..]).unwrap();
+            let mut i = 0;
+            while buf[i] != 0 {
+                i += 1;
+            }
+            let s = std::str::from_utf8(&buf[..i]).unwrap();
         
             Identifier::from(s)
         },

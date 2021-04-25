@@ -1,13 +1,4 @@
-use nom::{
-    branch::*,
-    bytes::complete::{is_not, tag},
-    character::complete::*,
-    combinator::*,
-    error::{context, VerboseError},
-    multi::{many0, many1},
-    sequence::*,
-    IResult, Parser,
-};
+use nom::{IResult, Parser, branch::*, bytes::complete::{is_not, tag}, character::complete::*, combinator::*, error::{VerboseError, VerboseErrorKind, context}, multi::{many0, many1}, sequence::*};
 use smol_str::SmolStr;
 
 /* utilities */
@@ -98,7 +89,7 @@ pub enum Identifier {
 
 pub fn name(input: &str) -> IResult<&str, Identifier, VerboseError<&str>> {
     let (i, t) = recognize(pair(
-        alt((alpha1, tag("-"))),
+        alpha1,
         many0(alt((alphanumeric1, tag("-")))),
     ))(input)?;
 
@@ -409,9 +400,21 @@ pub fn parse_constrain(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     context("constrain", s_expr!(inner))(input)
 }
 
+pub fn function_identifier(input: &str) -> IResult<&str, Identifier, VerboseError<&str>> {
+    map(pair(
+        many1(one_of("?!+-*/=≠<>≤≥-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")), 
+        many0(one_of("?!+-*/=≠<>≤≥-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))),
+        |(l, r)| {
+            let mut string = String::with_capacity(l.len() + r.len());
+            string.extend(l.into_iter());
+            string.extend(r.into_iter());
+            Identifier::Ident(string.into())
+        })(input)
+}
+
 pub fn parse_apply(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
     let inner = map(
-        tuple((identifier, many0(preceded(multispace1, cut(parse_expr))))),
+        tuple((function_identifier, many0(preceded(multispace1, cut(parse_expr))))),
         |(head, body)| Expr::Apply { head, body },
     );
     context("apply", s_expr!(inner))(input)

@@ -10,3 +10,4 @@ edition = "2018"
 nom = "6"
 smol_str = "*"
 common = {path = "../common"}
+smallvec = "1"
