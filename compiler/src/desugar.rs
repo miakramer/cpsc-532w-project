@@ -81,7 +81,7 @@ impl ExpressionTree {
     pub fn replace(&mut self, at: ExpressionRef, with: Expr) -> ExpressionRef {
         match self.expressions[at.index as usize] {
             Expr::Placeholder => (),
-            _ => panic!("Replacing non-placeholder value")
+            _ => panic!("Replacing non-placeholder value: {:?}\n -> with {:?}", &self.expressions[at.index as usize], &with)
         };
         // println!(" -> Replacing placeholder @ {}", at.index);
         self.expressions[at.index as usize] = with;
@@ -96,7 +96,6 @@ impl ExpressionTree {
 #[derive(Clone, Debug)]
 pub struct Program {
     pub proclaim: ProclaimThreshold,
-    pub defns: Vec<Defn>,
     pub body: ExpressionTree,
 }
 
@@ -116,19 +115,20 @@ pub enum DesugarError {
 pub fn desugar(raw: &parser::Program) -> Result<Program, DesugarError> {
     let mut prog = Program {
         proclaim: raw.proclaim,
-        defns: Vec::with_capacity(raw.defns.len()),
         body: ExpressionTree::new(),
     };
+
+    let mut defns = Vec::with_capacity(raw.defns.len());
 
     let mut name_state = 0u32;
 
     for defn in &raw.defns {
         let mut expr = ExpressionTree::new();
-        desugar_exprs(&mut expr, &defn.body,&prog.defns, &mut name_state)?;
+        desugar_exprs(&mut expr, &defn.body,&defns, &mut name_state)?;
 
         let name = ident(&defn.name, &mut name_state);
 
-        prog.defns.push(Defn {
+        defns.push(Defn {
             name: name.clone(),
             args: defn
                 .args
@@ -138,11 +138,12 @@ pub fn desugar(raw: &parser::Program) -> Result<Program, DesugarError> {
             body: expr,
         });
 
-        println!("\nFinished desugaring procedure {}:", name);
-        pretty_print(&prog.defns.last().unwrap().body);
+        // println!("\nFinished desugaring procedure {}:", name);
+        // pretty_print(&prog.defns.last().unwrap().body);
     }
 
-    desugar_exprs(&mut prog.body, &raw.body, &prog.defns, &mut name_state)?;
+    // println!();
+    desugar_exprs(&mut prog.body, &raw.body, &defns, &mut name_state)?;
 
     Ok(prog)
 }
@@ -280,9 +281,9 @@ fn desugar_exprs_proc(tree: &mut ExpressionTree, placeholder: ExpressionRef, at:
             Err(DesugarError::UnscopedVariable(v.clone()))
         }
     } else if let Expr::Begin(exprs) = expr {
-        let inner_placeholder = tree.placeholder();
         let mut new_exprs = Vec::with_capacity(exprs.len());
         for expr in exprs {
+            let inner_placeholder = tree.placeholder();
             new_exprs.push(desugar_exprs_proc(tree, inner_placeholder, *expr, call, proc, procedures, name_state, scoped_names)?);
         }
         Ok(tree.replace(placeholder, Expr::Begin(new_exprs)))
@@ -317,16 +318,16 @@ fn desugar_exprs_proc(tree: &mut ExpressionTree, placeholder: ExpressionRef, at:
         let right = desugar_exprs_proc(tree, inner_placeholder, *right, call, proc, procedures, name_state, scoped_names)?;
         Ok(tree.replace(placeholder, Expr::Constrain{relation: *relation, left, right}))
     } else if let Expr::Builtin{builtin, args} = expr {
-        let inner_placeholder = tree.placeholder();
         let mut new_args = Vec::with_capacity(args.len());
         for arg in args {
+            let inner_placeholder = tree.placeholder();
             new_args.push(desugar_exprs_proc(tree, inner_placeholder, *arg, call, proc, procedures, name_state, scoped_names)?)
         }
         Ok(tree.replace(placeholder, Expr::Builtin{builtin: *builtin, args: new_args}))
     } else if let Expr::Distribution{distribution, args} = expr {
-        let inner_placeholder = tree.placeholder();
         let mut new_args = Vec::with_capacity(args.len());
         for arg in args {
+            let inner_placeholder = tree.placeholder();
             new_args.push(desugar_exprs_proc(tree, inner_placeholder, *arg, call, proc, procedures, name_state, scoped_names)?)
         }
         Ok(tree.replace(placeholder, Expr::Distribution{distribution: *distribution, args: new_args}))

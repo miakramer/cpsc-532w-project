@@ -426,10 +426,10 @@ pub fn function_identifier(input: &str) -> IResult<&str, Identifier, VerboseErro
 }
 
 pub fn parse_apply(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
-    let inner = map(
-        tuple((function_identifier, many0(preceded(multispace1, cut(parse_expr))))),
-        |(head, body)| Expr::Apply { head, body },
-    );
+    let inner = cut(map(
+        tuple((function_identifier, many0(preceded(multispace1, parse_expr)), multispace0)),
+        |(head, body, _w)| Expr::Apply { head, body },
+    ));
     context("apply", s_expr!(inner))(input)
 }
 

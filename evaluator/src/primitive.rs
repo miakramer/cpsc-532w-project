@@ -611,7 +611,7 @@ impl Primitive {
             Primitive::Boolean(b) => print!("{}{}", b, Green.paint("::Boolean")),
             Primitive::Builtin(b) => print!("{}{}", b.name(), Green.paint("::Builtin")),
             // Primitive::DistributionType(d) => print!("{:?}{}", d, Green.paint("::DistributionType")),
-            Primitive::Distribution(d) => {
+            Primitive::Distribution(_d) => {
                 // print!("({}", d.distribution.name());
                 // for arg in &d.arguments {
                 //     print!(" ");
