@@ -1,0 +1,24 @@
+c ::= FLOAT | INT | BOOL
+
+RELATION ::= ≤ | < | = | ≠ | > | ≥
+
+e ::= c
+    | v | _
+    | (begin e1 … en)
+    | (let [v1 e1 ... vn en] e)
+    | (if e1 e2 e3)
+    | (f e1 … en)
+    | (sample e)
+    | (observe e1 e2)
+    | (decision e)
+    | (constrain RELATION e1 e2)
+    | (minimize e) | (maximize e)
+    | (foreach c [v1 e1 … vn en] e)
+    | (loop c e f e1 … en)
+
+d ::= int-range | one-of
+
+g ::= (proclaim-threshold c)
+
+q ::= e | (defn f [v1 … vn] e) q
+p ::= g q
