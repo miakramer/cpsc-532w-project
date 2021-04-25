@@ -272,6 +272,7 @@ pub fn parse_expr(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
             parse_sample,
             parse_observe,
             parse_decision,
+            parse_constrain,
             parse_apply,
         ))),
     )(input)
@@ -420,9 +421,9 @@ pub fn parse_apply(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
 
 #[derive(Clone, Debug)]
 pub struct Defn {
-    name: Identifier,
-    args: Vec<Identifier>,
-    body: Expr,
+    pub name: Identifier,
+    pub args: Vec<Identifier>,
+    pub body: Expr,
 }
 
 pub fn parse_defn(input: &str) -> IResult<&str, Defn, VerboseError<&str>> {
@@ -450,9 +451,9 @@ pub fn parse_defn(input: &str) -> IResult<&str, Defn, VerboseError<&str>> {
 
 #[derive(Clone, Debug)]
 pub struct Program {
-    proclaim: ProclaimThreshold,
-    defns: Vec<Defn>,
-    body: Expr,
+    pub proclaim: ProclaimThreshold,
+    pub defns: Vec<Defn>,
+    pub body: Expr,
 }
 
 pub fn parse_program(input: &str) -> IResult<&str, Program, VerboseError<&str>> {

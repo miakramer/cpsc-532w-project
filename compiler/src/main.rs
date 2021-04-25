@@ -3,6 +3,7 @@
 #[macro_use]
 extern crate nom;
 pub mod parser;
+pub mod desugar;
 
 use nom::error::VerboseError;
 use parser::*;
@@ -18,41 +19,36 @@ fn prettyprint<'a, T : std::fmt::Debug>(i: &'static str, val: nom::IResult<&'a s
     }
 }
 
+
+
 pub fn main() {
-    println!("{:?}", c("1234"));
-    println!("{:?}", c("12.34"));
-    println!("{:?}", c("true"));
-
-    println!("{:?}", identifier("foobar"));
-    println!("{:?}", identifier("_"));
-
-    println!("{:?}", domain_name("one-of"));
-
-    println!("{:?}", proclaim_threshold("(proclaim-threshold 0.5)"));
-
-    println!("{:?}", parse_expr("(begin 1 2 3)"));
-    println!("{:?}", parse_expr("(sample bar)"));
-    let i = "(if true\n    (sample bar)\n    (observe foo baz))";
-    prettyprint(i, parse_expr(i));
-
-    let i = r#"(let
-        [v1 (sample e) v2 (sample f)] (begin foo bar))"#;
-    prettyprint(i, parse_expr(i));
-
-    let i = "(foo-bar (sample e) (observe f g))";
-    prettyprint(i, parse_expr(i));
-
-    let i = "(defn f [a b c] (foo a b c))";
-    prettyprint(i, parse_defn(i));
-
-    let i = r#"
+    let prog1 = r#"
     (proclaim-threshold 0.8)
-
-    (defn f [a b c] (foo a b c))
-
-    (defn g [_] (abs -1.5))
-
-    (apply f (vector 1 2 3))
+    (let [d (decision (one-of 1 2))
+          dist (normal 1 1.5)
+          val (sample dist)]
+        (constrain = val dist))
     "#;
-    prettyprint(i, parse_program(i));
+
+    let parsed = match parser::parse_program(prog1) {
+        Ok((_, p)) => p,
+        Err(e) => match e {
+            nom::Err::Failure(e) => {
+                eprintln!("Parsing error:");
+                eprintln!("{}", nom::error::convert_error(prog1, e));
+                std::process::exit(1);
+            },
+            _ => unreachable!()
+        }
+    };
+
+    let desugared = match desugar::desugar(&parsed) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("{:?}", e);
+            std::process::exit(2);
+        }
+    };
+
+    println!("{:?}", desugared);
 }
