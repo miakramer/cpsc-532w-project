@@ -2,6 +2,7 @@
 
 pub mod parser;
 pub mod desugar;
+pub mod partial_eval;
 pub mod graph;
 
 use nom::error::VerboseError;
@@ -29,7 +30,7 @@ pub fn main() {
 
     if args.len() != 2 {
         eprintln!("Wrong number of arguments, expected 1, got {}", args.len() - 1);
-        std::process::exit(3);
+        std::process::exit(1);
     }
 
     let fpath = path::PathBuf::from(&args[1]);
@@ -44,7 +45,7 @@ pub fn main() {
             nom::Err::Failure(e) => {
                 eprintln!("Parsing error:");
                 eprintln!("{}", nom::error::convert_error(program.as_str(), e));
-                std::process::exit(1);
+                std::process::exit(2);
             },
             _ => unreachable!()
         }
@@ -56,14 +57,46 @@ pub fn main() {
         Ok(d) => d,
         Err(e) => {
             eprintln!("Error while desugaring: {:?}", e);
-            std::process::exit(2);
+            std::process::exit(3);
         }
     };
 
     let t2 = now();
 
+    println!("\n    Desugared:\n");
     desugar::pretty_print(&desugared.body);
+
+    let t3 = now();
+
+    let evald = match partial_eval::partial_eval(&desugared.body) {
+        Ok(e) => e,
+        Err(e) => {
+            eprint!("Error while partially evaluating:");
+            match e {
+                partial_eval::PartialEvalErr::Bubble(s) => {
+                    eprintln!("{}", s);
+                }
+                partial_eval::PartialEvalErr::Undefined(i) => {
+                    eprintln!("Name {:?} undefined", i);
+                }
+                partial_eval::PartialEvalErr::Placeholder => {
+                    eprintln!("Encountered placeholder value.");
+                }
+                partial_eval::PartialEvalErr::Observe => {
+                    eprintln!("Observe not yet supported.");
+                }
+            }
+            std::process::exit(4);
+        }
+    };
+
+    let t4 = now();
+
+    println!("\n    Partially evaluated:\n");
+
+    partial_eval::pretty_print(&evald);
 
     println!("\nParsing took {:?}", t1.duration_since(t0));
     println!("Desugaring took {:?}", t2.duration_since(t1));
+    println!("Partial evaluation took {:?}", t4.duration_since(t3));
 }

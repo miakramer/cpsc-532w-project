@@ -8,7 +8,7 @@ pub type Identifier = SmolStr;
 
 #[derive(Clone, Copy, Debug)]
 pub struct ExpressionRef {
-    index: u32,
+    pub(crate) index: u32,
 }
 
 const SMALL_ARG_SIZE: usize = 4;
@@ -163,6 +163,8 @@ fn ident(source: &parser::Identifier, state: &mut u32) -> Identifier {
                 i += 1;
             }
             let s = std::str::from_utf8(&buf[..i]).unwrap();
+
+            *state += 1;
         
             Identifier::from(s)
         },

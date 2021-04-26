@@ -1,5 +1,8 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+pub mod eqmap;
+pub mod primitives;
+pub mod distribution;
 
 lazy_static! {
     static ref BUILTINS: HashMap<&'static str, Builtin> = {

@@ -13,3 +13,4 @@ common = {path = "../common"}
 smallvec = "1"
 typed-arena = "2"
 im = "15"
+ndarray = "*"
