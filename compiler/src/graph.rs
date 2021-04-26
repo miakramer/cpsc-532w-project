@@ -1,7 +1,9 @@
 pub use crate::parser::{ProclaimThreshold, Relation, C};
 pub use crate::desugar::*;
 // use common::DistributionType;
-use smallvec::SmallVec;
+
+mod expressions;
+pub use expressions::*;
 
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -67,40 +69,11 @@ impl Variables {
     }
 }
 
-
-#[derive(Clone, Copy, Debug)]
-pub enum PredicateExpr {
-    And(u32, u32),
-    Or(u32, u32),
-    Not(u32),
-    Eq(u32, u32),
-    Ne(u32, u32),
-    Lt(u32, u32),
-    Gt(u32, u32),
-    Le(u32, u32),
-    Ge(u32, u32),
-
-    VarRef(VarRef),
-}
-
-#[derive(Clone, Debug)]
-pub struct Predicate {
-    pub exprs: SmallVec<[PredicateExpr; 8]>,
-    pub not: bool, // invert expression
-}
-
-impl Predicate {
-    pub fn not(&self) -> Self {
-        let exprs = self.exprs.clone();
-        Predicate { exprs, not: !self.not }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Constraint {
     pub relation: Relation,
-    pub left: VarRef, // will be some sort of expression
-    pub right: VarRef, // also here
+    pub left: ExpressionTree<VarRef>, // will be some sort of expression
+    pub right: ExpressionTree<VarRef>, // also here
     pub when: Predicate,
 }
 
@@ -114,6 +87,6 @@ pub struct Dependency {
 pub struct ScpGraph {
     pub variables: Variables,
     pub dependencies: Vec<Dependency>,
-    pub links: Vec<()>, // will be some sort of expression
+    pub links: Vec<ExpressionTree<VarRef>>, // will be some sort of expression
     pub constraints: Vec<Constraint>,
 }

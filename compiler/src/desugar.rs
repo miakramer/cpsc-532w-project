@@ -14,9 +14,9 @@ pub struct ExpressionRef {
 const SMALL_ARG_SIZE: usize = 4;
 
 #[derive(Clone, Debug)]
-pub enum Expr {
+pub enum Expr<Var> {
     C(C),
-    V(Identifier),
+    V(Var),
     Begin(Vec<ExpressionRef>),
     If {
         predicate: ExpressionRef,
@@ -51,11 +51,11 @@ pub enum Expr {
 }
 
 #[derive(Clone, Debug)]
-pub struct ExpressionTree {
-    expressions: Vec<Expr>,
+pub struct ExpressionTree<Var> {
+    expressions: Vec<Expr<Var>>,
 }
 
-impl ExpressionTree {
+impl<Var : std::fmt::Debug> ExpressionTree<Var> {
     pub fn new() -> Self {
         Self {
             expressions: Vec::new(),
@@ -66,7 +66,7 @@ impl ExpressionTree {
         ExpressionRef { index: 0 }
     }
 
-    pub fn push(&mut self, expr: Expr) -> ExpressionRef {
+    pub fn push(&mut self, expr: Expr<Var>) -> ExpressionRef {
         let l = self.expressions.len() as u32;
         self.expressions.push(expr);
         ExpressionRef { index: l }
@@ -78,7 +78,7 @@ impl ExpressionTree {
         ret
     }
 
-    pub fn replace(&mut self, at: ExpressionRef, with: Expr) -> ExpressionRef {
+    pub fn replace(&mut self, at: ExpressionRef, with: Expr<Var>) -> ExpressionRef {
         match self.expressions[at.index as usize] {
             Expr::Placeholder => (),
             _ => panic!("Replacing non-placeholder value: {:?}\n -> with {:?}", &self.expressions[at.index as usize], &with)
@@ -88,7 +88,7 @@ impl ExpressionTree {
         at
     }
 
-    pub fn deref<'a>(&'a self, at: ExpressionRef) -> &Expr {
+    pub fn deref<'a>(&'a self, at: ExpressionRef) -> &Expr<Var> {
         &self.expressions[at.index as usize]
     }
 }
@@ -96,14 +96,14 @@ impl ExpressionTree {
 #[derive(Clone, Debug)]
 pub struct Program {
     pub proclaim: ProclaimThreshold,
-    pub body: ExpressionTree,
+    pub body: ExpressionTree<Identifier>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Defn {
     name: Identifier,
     args: Vec<Identifier>,
-    body: ExpressionTree,
+    body: ExpressionTree<Identifier>,
 }
 
 #[derive(Debug)]
@@ -179,7 +179,7 @@ fn procedure_by_name<'a>(name: &Identifier, procedures: &'a [Defn]) -> Option<&'
     None
 }
 
-fn desugar_exprs(tree: &mut ExpressionTree, source: &parser::Expr, procedures: &[Defn], name_state: &mut u32) -> Result<ExpressionRef, DesugarError> {
+fn desugar_exprs(tree: &mut ExpressionTree<Identifier>, source: &parser::Expr, procedures: &[Defn], name_state: &mut u32) -> Result<ExpressionRef, DesugarError> {
     let placeholder = tree.placeholder();
     match source {
         parser::Expr::C(c) => Ok(tree.replace(placeholder, Expr::C(*c))),
@@ -237,7 +237,7 @@ fn desugar_exprs(tree: &mut ExpressionTree, source: &parser::Expr, procedures: &
     }
 }
 
-fn desugar_exprs_let(tree: &mut ExpressionTree, placeholder: ExpressionRef, procedures: &[Defn], name_state: &mut u32, bindings: &[(parser::Identifier, parser::Expr)], body: &parser::Expr) -> Result<ExpressionRef, DesugarError> {
+fn desugar_exprs_let(tree: &mut ExpressionTree<Identifier>, placeholder: ExpressionRef, procedures: &[Defn], name_state: &mut u32, bindings: &[(parser::Identifier, parser::Expr)], body: &parser::Expr) -> Result<ExpressionRef, DesugarError> {
     if bindings.len() == 0 {
         panic!("Shouldn't happen")
     } else if bindings.len() == 1 {
@@ -267,7 +267,7 @@ fn push_name(name: &Identifier, names: &im::Vector<Identifier>) -> im::Vector<Id
     names
 }
 
-fn desugar_exprs_proc(tree: &mut ExpressionTree, placeholder: ExpressionRef, at: ExpressionRef, call: &[parser::Expr], proc: &Defn, procedures: &[Defn], name_state: &mut u32, scoped_names: &im::Vector<Identifier>) -> Result<ExpressionRef, DesugarError> {
+fn desugar_exprs_proc(tree: &mut ExpressionTree<Identifier>, placeholder: ExpressionRef, at: ExpressionRef, call: &[parser::Expr], proc: &Defn, procedures: &[Defn], name_state: &mut u32, scoped_names: &im::Vector<Identifier>) -> Result<ExpressionRef, DesugarError> {
     // let placeholder = tree.placeholder();
     let expr = proc.body.deref(at);
     if let Expr::C(c) = expr {
@@ -336,7 +336,7 @@ fn desugar_exprs_proc(tree: &mut ExpressionTree, placeholder: ExpressionRef, at:
     }
 }
 
-pub fn pretty_print(tree: &ExpressionTree) {
+pub fn pretty_print(tree: &ExpressionTree<Identifier>) {
     pretty_print_at(tree, ExpressionRef{index: 0}, 0)
 }
 
@@ -347,7 +347,7 @@ fn indent(indentation: usize) {
     print!("{}", String::from_iter(repeat(' ').take(indentation * 2)))
 }
 
-fn pretty_print_at(tree: &ExpressionTree, at: ExpressionRef, indentation: usize) {
+fn pretty_print_at(tree: &ExpressionTree<Identifier>, at: ExpressionRef, indentation: usize) {
     indent(indentation);
     match tree.deref(at) {
         Expr::C(c) => println!("{:?}", c),
