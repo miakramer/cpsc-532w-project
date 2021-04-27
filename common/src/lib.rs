@@ -3,6 +3,7 @@ use std::collections::HashMap;
 pub mod eqmap;
 pub mod primitives;
 pub mod distribution;
+use serde::{Serialize, Deserialize};
 
 lazy_static! {
     static ref BUILTINS: HashMap<&'static str, Builtin> = {
@@ -15,6 +16,7 @@ lazy_static! {
         builtins.insert("-", Builtin::Sub);
         builtins.insert("*", Builtin::Mul);
         builtins.insert("/", Builtin::Div);
+        builtins.insert("pow", Builtin::Pow);
         builtins.insert("sqrt", Builtin::Sqrt);
         builtins.insert("first", Builtin::First);
         builtins.insert("peek", Builtin::First);
@@ -50,24 +52,25 @@ lazy_static! {
 
         distributions.insert("dirac", DistributionType::Dirac);
         distributions.insert("kronecker", DistributionType::Kronecker);
-        distributions.insert("uniform-continuous", DistributionType::UniformContinuous);
+        // distributions.insert("uniform-continuous", DistributionType::UniformContinuous);
         distributions.insert("uniform-discrete", DistributionType::UniformDiscrete);
-        distributions.insert("uniform", DistributionType::UniformContinuous);
+        // distributions.insert("uniform", DistributionType::UniformContinuous);
         distributions.insert("categorical", DistributionType::Categorical);
-        distributions.insert("normal", DistributionType::Normal);
-        distributions.insert("cauchy", DistributionType::Cauchy);
-        distributions.insert("beta", DistributionType::Beta);
-        distributions.insert("dirichlet", DistributionType::Dirichlet);
-        distributions.insert("gamma", DistributionType::Gamma);
-        distributions.insert("exponential", DistributionType::Exponential);
-        distributions.insert("discrete", DistributionType::Categorical);
+        distributions.insert("map-categorical", DistributionType::MappedCategorical);
+        // distributions.insert("normal", DistributionType::Normal);
+        // distributions.insert("cauchy", DistributionType::Cauchy);
+        // distributions.insert("beta", DistributionType::Beta);
+        // distributions.insert("dirichlet", DistributionType::Dirichlet);
+        // distributions.insert("gamma", DistributionType::Gamma);
+        // distributions.insert("exponential", DistributionType::Exponential);
+        // distributions.insert("discrete", DistributionType::Categorical);
         distributions.insert("flip", DistributionType::Bernoulli);
 
         distributions
     };
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum Builtin {
     OneOf,
     IntRange,
@@ -109,13 +112,14 @@ impl Builtin {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum DistributionType {
     Dirac,
     Kronecker,
     UniformContinuous,
     UniformDiscrete,
     Categorical,
+    MappedCategorical,
     // LogCategorical,
 
     Normal,

@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 lazy_static = "*"
-ndarray = "*"
-im = "15"
+ndarray = {version = "*", features=["serde"]}
+im = {version = "15", features=["serde"] }
 num-traits = "*"
+serde = { version = "1", features=["derive"] }

@@ -32,6 +32,13 @@ macro_rules! get_arg {
             Err(_) => {return Err(String::from($message))},
         };
     };
+    ($argname:ident, $arg:expr, list, $message:expr) => {
+        let $argname: Vec<Primitive> = match &$arg {
+            Primitive::Vector(v) => v.iter().cloned().collect(),
+            Primitive::EvaluatedVector(v) => v.iter().map(|f| Primitive::from(*f)).collect(),
+            _ => {return Err(String::from($message))},
+        };
+    };
 }
 
 
@@ -76,10 +83,23 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             weights /= weights.iter().copied().sum::<f32>();
             if weights.iter().any(|x| *x < 0.0) {
                 Err("(categorical weights): all weights must be positive".into())
-            }
-            else {
+            } else {
                 Ok(Distribution::Categorical{weights})
-            }            
+            }
+        }
+        DistributionType::MappedCategorical => {
+            assert_num_args!("(map-categorical weights values)", args, 2);
+            get_arg!(weights, &args[0], vector, "(map-categorical weights values) requires `weights` to be a vector of numbers.");
+            get_arg!(values, &args[1], list, "(map-categorical weights values) requires `values` to be a vector.");
+            let mut weights = weights;
+            weights /= weights.iter().copied().sum::<f32>();
+            if weights.iter().any(|x| *x < 0.0) {
+                Err("(map-categorical weights values): all weights must be positive".into())
+            } else if weights.len() != values.len() {
+                Err("(map-categorical weights values): values and weights must have the same length".into())
+            } else {
+                Ok(Distribution::MappedCategorical{weights, values})
+            }
         }
         DistributionType::Normal => {
             assert_num_args!("(normal mu sigma)", args, 2);

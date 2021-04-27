@@ -11,6 +11,6 @@ nom = "6"
 smol_str = "*"
 common = {path = "../common"}
 smallvec = "1"
-typed-arena = "2"
-im = "15"
-ndarray = "*"
+im = {version = "15", features=["serde"] }
+ndarray = {version = "*", features=["serde"]}
+serde = { version = "1", features=["derive"] }
