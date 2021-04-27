@@ -113,10 +113,10 @@ pub fn main() {
     println!("\n==============\n    Graph:\n==============\n");
     graph::pretty_print(&g);
 
-    println!("\nParsing took {:?}", t1.duration_since(t0));
-    println!("Desugaring took {:?}", t2.duration_since(t1));
+    println!("\nParsing took            {:?}", t1.duration_since(t0));
+    println!("Desugaring took         {:?}", t2.duration_since(t1));
     println!("Partial evaluation took {:?}", t4.duration_since(t3));
-    println!("Graph compilation took: {:?}", t6.duration_since(t5));
+    println!("Graph compilation took  {:?}", t6.duration_since(t5));
 
     println!("Saving to {:?}…", &opath);
     let serialized = bincode::serialize(&g).unwrap();

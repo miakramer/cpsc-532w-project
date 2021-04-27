@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use primitives::Primitive;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
-use std::{collections::HashMap, num::NonZeroU32};
+use std::collections::HashMap;
 pub mod eqmap;
 pub mod primitives;
 pub mod distribution;
