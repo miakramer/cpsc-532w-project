@@ -7,16 +7,16 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-im = "15"
-smallvec = "1"
-smol_str = "0.1"
-ndarray = "*"
+im = {version = "15", features=["serde"] }
+smallvec = {version = "1", features=["serde"] }
+smol_str = {version="*", features=["serde"]}
+ndarray = {version = "*", features=["serde"]}
 ndarray-npy = "*"
 num-traits = "0.2"
-lazy_static = "*"
-serde_json = "*"
-ansi_term = "0.12"
 rand = "0.8"
 rand_distr = "0.4"
 libc = "*"
 special = "*"
+serde = { version = "1", features=["derive"] }
+bincode = "1"
+common = {path="../common"}

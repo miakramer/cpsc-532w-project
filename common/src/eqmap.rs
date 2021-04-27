@@ -3,7 +3,7 @@ use std::iter::FromIterator;
 use im::Vector;
 
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct EqMap<Key: PartialEq + std::fmt::Debug + Clone, Val: std::fmt::Debug + Clone> {
     storage: Vector<(Key, Val)>,
 }

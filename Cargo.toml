@@ -2,5 +2,5 @@
 members = [
     "common",
     "compiler",
-    # "evaluator",
+    "evaluator",
 ]

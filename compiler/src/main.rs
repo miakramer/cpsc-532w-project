@@ -23,17 +23,19 @@ fn prettyprint<'a, T : std::fmt::Debug>(i: &'static str, val: nom::IResult<&'a s
 
 pub fn main() {
     use std::time::Instant;
+    use std::io::Write;
 
     let now = || Instant::now();
 
     let args: Vec<String> = std::env::args().collect();
 
-    if args.len() != 2 {
-        eprintln!("Wrong number of arguments, expected 1, got {}", args.len() - 1);
+    if args.len() != 3 {
+        eprintln!("Wrong number of arguments, expected 2, got {}", args.len() - 1);
         std::process::exit(1);
     }
 
     let fpath = path::PathBuf::from(&args[1]);
+    let opath = path::PathBuf::from(&args[2]);
 
     let program = std::fs::read_to_string(fpath).expect(&format!("Could not find file {:?}", &args[1]));
 
@@ -111,4 +113,10 @@ pub fn main() {
     println!("Desugaring took {:?}", t2.duration_since(t1));
     println!("Partial evaluation took {:?}", t4.duration_since(t3));
     println!("Graph compilation took: {:?}", t6.duration_since(t5));
+
+    println!("Saving to {:?}…", &opath);
+    let serialized = bincode::serialize(&g).unwrap();
+    let mut f = std::fs::File::create(opath).unwrap();
+    f.write_all(&serialized).unwrap();
+    println!("Done.");
 }

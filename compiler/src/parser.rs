@@ -1,6 +1,6 @@
 use nom::{IResult, branch::*, bytes::complete::tag, character::complete::*, combinator::*, error::{VerboseError, context}, multi::{many0, many1}, sequence::*};
 use smol_str::SmolStr;
-
+use common::*;
 /* utilities */
 
 // fn comment(i: &str) -> IResult<&str, (), VerboseError<&str>> {
@@ -128,29 +128,6 @@ macro_rules! b_expr {
 }
 
 /* relation */
-
-#[derive(Clone, Copy, Debug)]
-pub enum Relation {
-    Eq,
-    Neq,
-    Lt,
-    Gt,
-    Leq,
-    Geq,
-}
-
-impl Relation {
-    pub fn pretty_print(&self) -> &'static str {
-        match self {
-            Self::Eq => "=",
-            Self::Neq => "≠",
-            Self::Lt => "<",
-            Self::Gt => ">",
-            Self::Leq => "≤",
-            Self::Geq => "≥"
-        }
-    }
-}
 
 pub fn relation(input: &str) -> IResult<&str, Relation, VerboseError<&str>> {
     map_res(

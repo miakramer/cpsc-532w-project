@@ -8,9 +8,10 @@ edition = "2018"
 
 [dependencies]
 nom = "6"
-smol_str = "*"
+smol_str = {version="*", features=["serde"]}
 common = {path = "../common"}
-smallvec = "1"
-typed-arena = "2"
-im = "15"
-ndarray = "*"
+smallvec = {version = "1", features=["serde"] }
+im = {version = "15", features=["serde"] }
+ndarray = {version = "*", features=["serde"]}
+serde = { version = "1", features=["derive"] }
+bincode = "1"

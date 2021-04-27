@@ -3,16 +3,28 @@ use im::Vector;
 use crate::eqmap::*;
 use num_traits::*;
 use std::convert::TryFrom;
+use serde::{Serialize, Deserialize};
+use rand::prelude::*;
 
 pub type PHashMap = EqMap<Primitive, Primitive>;
 
-#[derive(Clone, Debug, PartialEq)]
+pub trait Support {
+    fn cardinality(&self) -> usize;
+}
+
+pub trait Sample {
+    type Output;
+    fn sample(&self, rng: &mut ThreadRng) -> Self::Output;
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Distribution {
     Dirac{center: f64},
     Kronecker{center: i128},
     UniformContinuous{a: f64, b: f64},
     UniformDiscrete{a: i128, b: i128},
     Categorical{weights: Array1<f32>},
+    MappedCategorical{weights: Array1<f32>, values: Vec<Primitive>},
     Normal{mu: f64, sigma: f64},
     Cauchy{median: f64, scale: f64},
     Beta{alpha: f64, beta: f64},
@@ -21,16 +33,42 @@ pub enum Distribution {
     Gamma{shape: f64, rate: f64},
     Bernoulli{p: f64},
     Binomial{n: u64, p: f64},
-} 
+}
 
-#[derive(Clone, Debug, PartialEq)]
+
+impl Support for Distribution {
+    fn cardinality(&self) -> usize {
+        match self {
+            Self::Dirac{center: _} => 1,
+            Self::Kronecker{center: _} => 1,
+            Self::UniformDiscrete{a, b} => (b - a) as usize,
+            Self::Categorical{weights} => weights.len(),
+            Self::MappedCategorical{weights, values: _} => weights.len(),
+            Self::Bernoulli{p: _} => 2,
+            _ => todo!()
+        }
+    }
+}
+
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Domain {
     OneOf(Vec<Primitive>),
     IntRange(i128, i128),
 }
 
 
-#[derive(Clone, Debug)]
+impl Support for Domain {
+    fn cardinality(&self) -> usize {
+        match self {
+            Self::OneOf(v) => v.len(),
+            Self::IntRange(a, b) => (b - a) as usize,
+        }
+    }
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Primitive {
     Boolean(bool),
     Float(f64),
@@ -42,6 +80,15 @@ pub enum Primitive {
     Domain(Domain),
     // optimizations
     EvaluatedVector(Array1<f64>),
+}
+
+
+
+pub fn is_const(p: &Primitive) -> bool {
+    match p {
+        Primitive::Boolean(_) | Primitive::Float(_) | Primitive::Int(_) | Primitive::Vector(_) | Primitive::EvaluatedVector(_) => true,
+        _ => false,
+    }
 }
 
 

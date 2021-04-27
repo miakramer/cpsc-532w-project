@@ -1,15 +1,9 @@
-use common::DistributionType;
+use common::*;
 use smol_str::SmolStr;
 
 use crate::parser;
-pub use crate::parser::{ProclaimThreshold, Relation, C};
+pub use crate::parser::{ProclaimThreshold, C};
 
-pub type Identifier = SmolStr;
-
-#[derive(Clone, Copy, Debug)]
-pub struct ExpressionRef {
-    pub(crate) index: u32,
-}
 
 const SMALL_ARG_SIZE: usize = 4;
 
