@@ -1,6 +1,5 @@
 pub use crate::parser::{ProclaimThreshold, Relation, C};
 pub use crate::partial_eval::*;
-use common::{*, primitives::{Distribution, Domain, Primitive}, distribution::build_distribution};
 
 use smallvec::SmallVec;
 
@@ -75,11 +74,18 @@ impl Variables {
 }
 
 #[derive(Clone, Debug)]
+pub struct Predicate {
+    pub pred: EvaluatedTree,
+    pub negated: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct Constraint {
+    pub probability: f64,
     pub relation: Relation,
     pub left: EvaluatedTree,
     pub right: EvaluatedTree,
-    pub predicate: EvaluatedTree,
+    pub predicate: SmallVec<[Predicate; 8]>,
 }
 
 #[derive(Clone, Debug)]
@@ -93,6 +99,7 @@ pub struct ScpGraph {
     pub variables: Variables,
     pub dependencies: Vec<Dependency>,
     pub constraints: Vec<Constraint>,
+    pub body: EvaluatedTree,
 }
 
 impl ScpGraph {
@@ -111,15 +118,15 @@ impl ScpGraph {
 }
 
 
-pub fn compile_graph(evald: &EvaluatedTree) -> ScpGraph {
+pub fn compile_graph(body: EvaluatedTree) -> ScpGraph {
     let mut variables = Variables::new();
-    gather_variables(evald, evald.root(), &mut variables);
+    gather_variables(&body, body.root(), &mut variables);
     let mut dependencies = Vec::new();
     gather_dependencies(&variables, &mut dependencies);
     let mut constraints = Vec::new();
-    gather_constraints(&variables, &mut constraints);
+    gather_constraints(&body, body.root(), &variables, &mut constraints, &im::Vector::new());
 
-    ScpGraph{variables, dependencies, constraints}
+    ScpGraph{variables, dependencies, constraints, body}
 }
 
 fn gather_variables(evald: &EvaluatedTree, at: ExpressionRef, variables: &mut Variables) {
@@ -149,7 +156,7 @@ fn gather_variables(evald: &EvaluatedTree, at: ExpressionRef, variables: &mut Va
             gather_variables(evald, *consequent, variables);
             gather_variables(evald, *alternative, variables);
         }
-        EE::Constrain{relation: _, left, right} => {
+        EE::Constrain{prob: _, relation: _, left, right} => {
             gather_variables(evald, *left, variables);
             gather_variables(evald, *right, variables);
         }
@@ -192,11 +199,11 @@ fn clone(from: &EvaluatedTree, to: &mut EvaluatedTree, src_at: ExpressionRef) ->
             let alternative = clone(from, to, alternative);
             EE::If{predicate, consequent, alternative}
         }
-        EE::Constrain{relation, left, right} => {
+        EE::Constrain{prob, relation, left, right} => {
             let (relation, left, right) = (*relation, *left, *right);
             let left = clone(from, to, left);
             let right = clone(from, to, right);
-            EE::Constrain{relation, left, right}
+            EE::Constrain{prob: *prob, relation, left, right}
         }
         EE::Builtin{builtin, args} => {
             let builtin = *builtin;
@@ -273,7 +280,7 @@ fn gather_dependencies_at(tree: &EvaluatedTree, at: ExpressionRef, variables: &V
             gather_dependencies_at(tree, *consequent, variables, this, refs);
             gather_dependencies_at(tree, *alternative, variables, this, refs);
         }
-        EE::Constrain{relation: _, left, right} => {
+        EE::Constrain{prob: _, relation: _, left, right} => {
             gather_dependencies_at(tree, *left, variables, this, refs);
             gather_dependencies_at(tree, *right, variables, this, refs);
         }
@@ -291,7 +298,57 @@ fn gather_dependencies_at(tree: &EvaluatedTree, at: ExpressionRef, variables: &V
     }
 }
 
-fn gather_constraints(variables: &Variables, dependencies: &mut Vec<Constraint>) {
+pub fn push(predicate: EvaluatedTree, negated: bool, predicates: &im::Vector<Predicate>) -> im::Vector<Predicate> {
+    let mut preds = predicates.clone();
+    preds.push_back(Predicate{
+        pred: predicate,
+        negated
+    });
+    preds
+}
+
+fn gather_constraints(tree: &EvaluatedTree, at: ExpressionRef, variables: &Variables, constraints: &mut Vec<Constraint>, predicates: &im::Vector<Predicate>) {
+    match tree.deref(at) {
+        EE::C(_) => (),
+        EE::Begin(v) => {
+            for expr in v {
+                gather_constraints(tree, *expr, variables, constraints, predicates);
+            }
+        }
+        EE::Decision{id: _, body: _} => (),
+        EE::Stochastic{id: _, body: _} => (),
+        EE::If{predicate, consequent, alternative} => {
+            gather_constraints(tree, *predicate, variables, constraints, predicates);
+            let mut pred = EvaluatedTree::new();
+            clone(tree, &mut pred, *predicate);
+            gather_constraints(tree, *consequent, variables, constraints, &push(pred.clone(), false, predicates));
+            gather_constraints(tree, *alternative, variables, constraints, &push(pred.clone(), true, predicates));
+        }
+        EE::Constrain{prob, relation, left, right} => {
+            let mut new_left = EvaluatedTree::new();
+            clone(tree, &mut new_left, *left);
+            let mut new_right = EvaluatedTree::new();
+            clone(tree, &mut new_right, *right);
+            constraints.push(Constraint {
+                probability: *prob,
+                relation: *relation,
+                left: new_left,
+                right: new_right,
+                predicate: predicates.iter().cloned().collect()
+            })
+        }
+        EE::Builtin{builtin: _, args} => {
+            for expr in args {
+                gather_constraints(tree, *expr, variables, constraints, predicates);
+            }
+        }
+        EE::Distribution{distribution: _, args} => {
+            for expr in args {
+                gather_constraints(tree, *expr, variables, constraints, predicates);
+            }
+        }
+        _ => unreachable!()
+    }
 }
 
 
@@ -308,4 +365,27 @@ pub fn pretty_print(graph: &ScpGraph) {
         pretty_print_at(&var.definition, var.definition.root(), 2);
     }
     println!("\nConstraints:");
+    for constraint in graph.constraints.iter() {
+        println!("\n• (P={}) {}", constraint.probability, constraint.relation.pretty_print());
+        println!("  → left:");
+        pretty_print_at(&constraint.left, constraint.left.root(), 2);
+        println!("  → right:");
+        pretty_print_at(&constraint.right, constraint.right.root(), 2);
+        println!("  → when:");
+        if constraint.predicate.len() == 0 {
+            println!("    true");
+        } else {
+            for pred in constraint.predicate.iter() {
+                println!("    (all");
+                if pred.negated {
+                    println!("      (not");
+                    pretty_print_at(&pred.pred, pred.pred.root(), 4);
+                    println!("      )");
+                } else {
+                    pretty_print_at(&pred.pred, pred.pred.root(), 3);
+                }
+                println!("    )")
+            }
+        }
+    }
 }

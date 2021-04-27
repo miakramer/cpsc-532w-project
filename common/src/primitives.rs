@@ -1,4 +1,3 @@
-use super::*;
 use ndarray::prelude::*;
 use im::Vector;
 use crate::eqmap::*;

@@ -239,6 +239,7 @@ pub enum Expr {
     },
     Decision(Box<Expr>),
     Constrain {
+        prob: f64,
         relation: Relation,
         left: Box<Expr>,
         right: Box<Expr>,
@@ -399,12 +400,14 @@ pub fn parse_constrain(input: &str) -> IResult<&str, Expr, VerboseError<&str>> {
         preceded(
             tag("constrain"),
             cut(tuple((
+                opt(preceded(multispace1, float)),
                 preceded(multispace1, relation),
                 preceded(multispace1, parse_expr),
                 preceded(multispace1, parse_expr),
             ))),
         ),
-        |(relation, left, right)| Expr::Constrain {
+        |(prob, relation, left, right)| Expr::Constrain {
+            prob: prob.unwrap_or(1.0),
             relation,
             left: Box::new(left),
             right: Box::new(right),
@@ -467,7 +470,7 @@ pub fn parse_defn(input: &str) -> IResult<&str, Defn, VerboseError<&str>> {
 
 #[derive(Clone, Debug)]
 pub struct Program {
-    pub proclaim: ProclaimThreshold,
+    // pub proclaim: ProclaimThreshold,
     pub defns: Vec<Defn>,
     pub body: Expr,
 }
@@ -477,12 +480,12 @@ pub fn parse_program(input: &str) -> IResult<&str, Program, VerboseError<&str>> 
         "(top-level)",
         map(
             tuple((
-                context("(proclaim)", preceded(multispace0, proclaim_threshold)),
+                // context("(proclaim)", preceded(multispace0, proclaim_threshold)),
                 context("(defns)", many0(preceded(multispace0, parse_defn))),
                 context("(main)", preceded(multispace0, parse_expr)),
             )),
-            |(proclaim, defns, body)| Program {
-                proclaim,
+            |(defns, body)| Program {
+                // proclaim,
                 defns,
                 body,
             },

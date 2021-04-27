@@ -35,6 +35,7 @@ pub enum Expr<Var> {
     },
     Decision(ExpressionRef),
     Constrain {
+        prob: f64,
         relation: Relation,
         left: ExpressionRef,
         right: ExpressionRef,
@@ -95,7 +96,7 @@ impl<Var : std::fmt::Debug> ExpressionTree<Var> {
 
 #[derive(Clone, Debug)]
 pub struct Program {
-    pub proclaim: ProclaimThreshold,
+    // pub proclaim: ProclaimThreshold,
     pub body: ExpressionTree<Identifier>,
 }
 
@@ -114,7 +115,7 @@ pub enum DesugarError {
 
 pub fn desugar(raw: &parser::Program) -> Result<Program, DesugarError> {
     let mut prog = Program {
-        proclaim: raw.proclaim,
+        // proclaim: raw.proclaim,
         body: ExpressionTree::new(),
     };
 
@@ -215,10 +216,10 @@ fn desugar_exprs(tree: &mut ExpressionTree<Identifier>, source: &parser::Expr, p
             let d = desugar_exprs(tree, d, procedures, name_state)?;
             Ok(tree.replace(placeholder, Expr::Decision(d)))
         }
-        parser::Expr::Constrain{relation, left, right} => {
+        parser::Expr::Constrain{prob, relation, left, right} => {
             let left = desugar_exprs(tree, left, procedures, name_state)?;
             let right = desugar_exprs(tree, right, procedures, name_state)?;
-            Ok(tree.replace(placeholder, Expr::Constrain{relation: *relation, left, right}))
+            Ok(tree.replace(placeholder, Expr::Constrain{prob: *prob, relation: *relation, left, right}))
         }
         parser::Expr::Apply{head, body} => {
             let name = ident(head, name_state);
@@ -314,11 +315,11 @@ fn desugar_exprs_proc(tree: &mut ExpressionTree<Identifier>, placeholder: Expres
         let inner_placeholder = tree.placeholder();
         let d = desugar_exprs_proc(tree, inner_placeholder, *d, call, proc, procedures, name_state, scoped_names)?;
         Ok(tree.replace(placeholder, Expr::Decision(d)))
-    } else if let Expr::Constrain{relation, left, right} = expr {
+    } else if let Expr::Constrain{prob, relation, left, right} = expr {
         let inner_placeholder = tree.placeholder();
         let left = desugar_exprs_proc(tree, inner_placeholder, *left, call, proc, procedures, name_state, scoped_names)?;
         let right = desugar_exprs_proc(tree, inner_placeholder, *right, call, proc, procedures, name_state, scoped_names)?;
-        Ok(tree.replace(placeholder, Expr::Constrain{relation: *relation, left, right}))
+        Ok(tree.replace(placeholder, Expr::Constrain{prob: *prob, relation: *relation, left, right}))
     } else if let Expr::Builtin{builtin, args} = expr {
         let mut new_args = Vec::with_capacity(args.len());
         for arg in args {
@@ -398,8 +399,8 @@ fn pretty_print_at(tree: &ExpressionTree<Identifier>, at: ExpressionRef, indenta
             indent(indentation);
             println!(") ; end decision")
         }
-        Expr::Constrain{relation, left, right} => {
-            println!("(constrain {}", relation.pretty_print());
+        Expr::Constrain{prob, relation, left, right} => {
+            println!("(constrain with-prob={} {}", prob, relation.pretty_print());
             pretty_print_at(tree, *left, indentation+1);
             pretty_print_at(tree, *right, indentation+1);
             indent(indentation);

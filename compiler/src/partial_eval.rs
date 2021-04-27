@@ -2,7 +2,7 @@
 
 pub use crate::parser::{ProclaimThreshold, Relation, C};
 pub use crate::desugar::*;
-use common::{*, primitives::{Distribution, Domain, Primitive}, distribution::build_distribution};
+use common::{primitives::{Distribution, Domain, Primitive}, distribution::build_distribution};
 
 mod eval;
 use eval::*;
@@ -53,6 +53,7 @@ pub enum EvalExpr {
         alternative: ExpressionRef,
     },
     Constrain{
+        prob: f64,
         relation: Relation,
         left: ExpressionRef,
         right: ExpressionRef,
@@ -158,6 +159,7 @@ pub enum PartialEvalErr {
     Undefined(Identifier),
     Placeholder,
     Observe,
+    InvalidProbability,
 }
 
 fn bind(bindings: &im::HashMap<Identifier, ExpressionRef>, this: Identifier, to: ExpressionRef) -> im::HashMap<Identifier, ExpressionRef> {
@@ -285,11 +287,14 @@ fn _partial_eval(src: &ExpressionTree<Identifier>, at: ExpressionRef, to: &mut E
                 Ok(to.replace(placeholder, EE::Distribution{distribution, args: new}))
             }
         }
-        Expr::Constrain{relation, left, right} => {
-            let (relation, left, right) = (*relation, *left, *right);
+        Expr::Constrain{prob, relation, left, right} => {
+            let (relation, left, right, prob) = (*relation, *left, *right, *prob);
+            if prob < 0. || prob > 1. {
+                return Err(PartialEvalErr::InvalidProbability);
+            }
             let left = _partial_eval(src, left, to, bindings, name_state, None)?;
             let right = _partial_eval(src, right, to, bindings, name_state, None)?;
-            Ok(to.replace(placeholder, EE::Constrain{relation, left, right}))
+            Ok(to.replace(placeholder, EE::Constrain{prob, relation, left, right}))
         }
         Expr::Placeholder => {Err(PartialEvalErr::Placeholder)}
         Expr::Observe{observable: _, observed: _} => {
@@ -326,11 +331,11 @@ fn _clone_at(tree: &mut EvaluatedTree, src_at: ExpressionRef) -> ExpressionRef {
             let alternative = _clone_at(tree, alternative);
             EE::If{predicate, consequent, alternative}
         }
-        EE::Constrain{relation, left, right} => {
-            let (relation, left, right) = (*relation, *left, *right);
+        EE::Constrain{prob, relation, left, right} => {
+            let (relation, left, right, prob) = (*relation, *left, *right, *prob);
             let left = _clone_at(tree, left);
             let right = _clone_at(tree, right);
-            EE::Constrain{relation, left, right}
+            EE::Constrain{prob, relation, left, right}
         }
         EE::Builtin{builtin, args} => {
             let builtin = *builtin;
@@ -397,8 +402,8 @@ pub(crate) fn pretty_print_at(tree: &EvaluatedTree, at: ExpressionRef, indentati
             indent(indentation);
             println!("); end sample");
         }
-        EE::Constrain{relation, left, right} => {
-            println!("(constrain {}", relation.pretty_print());
+        EE::Constrain{prob, relation, left, right} => {
+            println!("(constrain with-prob={} {}", prob, relation.pretty_print());
             pretty_print_at(tree, *left, indentation+1);
             pretty_print_at(tree, *right, indentation+1);
             indent(indentation);

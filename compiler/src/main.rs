@@ -71,7 +71,7 @@ pub fn main() {
     let evald = match partial_eval::partial_eval(&desugared.body) {
         Ok(e) => e,
         Err(e) => {
-            eprint!("Error while partially evaluating:");
+            eprint!("Error while partially evaluating: ");
             match e {
                 partial_eval::PartialEvalErr::Bubble(s) => {
                     eprintln!("{}", s);
@@ -84,6 +84,9 @@ pub fn main() {
                 }
                 partial_eval::PartialEvalErr::Observe => {
                     eprintln!("Observe not yet supported.");
+                }
+                partial_eval::PartialEvalErr::InvalidProbability => {
+                    eprintln!("Probabilities must be in [0, 1]");
                 }
             }
             std::process::exit(4);
@@ -98,7 +101,7 @@ pub fn main() {
 
     
     let t5 = now();
-    let g = graph::compile_graph(&evald);
+    let g = graph::compile_graph(evald);
     let t6 = now();
 
     println!("\n    Graph:\n");
