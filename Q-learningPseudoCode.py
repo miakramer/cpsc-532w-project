@@ -7,6 +7,7 @@
 # have: information about which variables are in which stage, L_D(m) = [subset of decision vars] L_S(m) = [subset of stochastic vars]
 # have: set of constraints, C
 # have: gamma, multiplier in the qhat update corresponding to how influential the previous Q is
+# have: objective function, Obj - if no objective function is given, set it by default to 1. Note, for the reward function and Q updates to work properly, objective functions need to be maximisations (if theyr'e minimisation in the input, modify it to an equivalent maximisation)
 
 D_combos = all possible combinations of decision vars values #assume it hase size (number of variables),(number of combos), in python I know there's a numpy function for this
 S_combos = all possible combinations of stochastic vars values # similarly
@@ -20,6 +21,7 @@ def random_x(L_D(m)):
     return x_random
 
 def stage_argmax_x(Q0,D,L_D(m),S,L_S(m),s_t):
+    """ returns the combination of decision variable values of the active decision variables corresponding to the maximum Q0 value given the sampling of stochastic variables s_t """
     # Q0 indicates the previous iterations' Q
     # need to identify Q0_m (the relevant parts of Q for this stage)
     Dm_combos = all possible combinations of active decision vars values # assume this is like above, each row is the value taken on by a decision variable, each column is a different combination of these values
@@ -48,11 +50,18 @@ def stage_argmax_x(Q0,D,L_D(m),S,L_S(m),s_t):
     return Dm_combos[ind_max] # returns the values of the decision vars corresponding to the max entry in Qm
 
 def max_x(Q,S_combos,s):
+    """ returns the maximum value over the decision variable combinations of the row in Q corresponding to sampled stochastic variable combination s """
     ind_s = find index in S_combos corresponding to the combination of sampled stochastic variable values in s
     q_max = max value of Q[ind_s,:]
 
     return q_max
 
+def reward(C,Obj,x,s):
+    """ returns 0 if at least one constraint is NOT satisfied, else if ALL constraints are satisfied it returns the value of the objective function """
+    for c in C: #loop through all constraints in C
+        if c(x,s) not satisfied: 
+            return 0 # returns 0 if at least one constraint isn't satisfied
+    return Obj(x,s) 
 
 while n <= N:
     sn = sample all stochastic variables T times
@@ -64,9 +73,8 @@ while n <= N:
             for s in L_S(m):
                 sm_t.append(s_t[s]) # poor notation, but basically says store sampled values of all active stochastic variables in sm_t
 
-            Cm = set of constraints only dependent on variables of stage m (only containing x in L_D(m) and s in L_S(m))
-
             # Naomi's idea would fit in here
+            # Cm = set of constraints only dependent on variables of stage m (only containing x in L_D(m) and s in L_S(m))
 
             # update x
             sample p in uniform(0,1)
@@ -79,14 +87,15 @@ while n <= N:
             m = m+1
         
         # now x_t is fully defined
-        qhat_t = reward(x_t,s_t) + gamma * max_x(Q0,S_combos,sn[t+1])
+        qhat_t = reward(C,Obj,x_t,s_t) + gamma * max_x(Q0,S_combos,sn[t+1])
 
         # update Q:
         decision_ind = find index in D_combos corresponding to combo of decision variable values in x_t
         stochastic_ind = find index in S_combos corresponding to combo of stochastic variable values in s_t
         Q1[decision_ind,stochastic_ind] = (1-alpha_n) * Q0[decision_ind,stochastic_ind] + alpha_n * qhat_t # here, Q(x_t,s_t) is the entry of Q corresponding to the combinations of decision and stochastic variable values that we have in x_t,s_t 
+        t = t+1
 
     update Q0 = Q1
-    
+    n = n+1
 
 
