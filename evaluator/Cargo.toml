@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 im = {version = "15", features=["serde"] }
-smallvec = "1"
-smol_str = "0.1"
+smallvec = {version = "1", features=["serde"] }
+smol_str = {version="*", features=["serde"]}
 ndarray = {version = "*", features=["serde"]}
 ndarray-npy = "*"
 num-traits = "0.2"
@@ -18,3 +18,5 @@ rand_distr = "0.4"
 libc = "*"
 special = "*"
 serde = { version = "1", features=["derive"] }
+bincode = "1"
+common = {path="../common"}

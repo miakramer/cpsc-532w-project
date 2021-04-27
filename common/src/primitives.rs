@@ -83,6 +83,15 @@ pub enum Primitive {
 }
 
 
+
+pub fn is_const(p: &Primitive) -> bool {
+    match p {
+        Primitive::Boolean(_) | Primitive::Float(_) | Primitive::Int(_) | Primitive::Vector(_) | Primitive::EvaluatedVector(_) => true,
+        _ => false,
+    }
+}
+
+
 impl PartialEq for Primitive {
     fn eq(&self, other: &Primitive) -> bool {
         match self {

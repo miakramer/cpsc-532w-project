@@ -25,6 +25,6 @@ For the partial evaluation, we do the following steps:
 
 Using it:
 
-To compile a program called `path/to/myfile`, run `cargo run path/to/myfile`. The first time you do that it'll compile a bunch of stuff, but should be pretty fast after that. Paths are relative to the root directory of this project.
+To compile a program called `path/to/myfile`, run `cargo run --bin compiler path/to/myfile path/to/output`. The first time you do that it'll compile a bunch of stuff, but should be pretty fast after that. Paths are relative to the root directory of this project.
 
-That will run in debug mode. To run in optimized mode (takes longer to compile but runs faster), run `cargo run --release path/to/myfile`.
+That will run in debug mode. To run in optimized mode (takes longer to compile but runs faster), run `cargo run --release --bin compiler path/to/myfile path/to/output`.

@@ -1,12 +1,11 @@
 
 
-pub use crate::parser::{ProclaimThreshold, Relation, C};
+pub use crate::parser::{ProclaimThreshold, C};
 pub use crate::desugar::*;
-use common::{primitives::{Distribution, Domain, Primitive}, distribution::build_distribution};
+use common::{*, primitives::*, distribution::build_distribution};
 
 mod eval;
 use eval::*;
-use smallvec::SmallVec;
 
 
 impl Into<Primitive> for C {
@@ -20,103 +19,6 @@ impl Into<Primitive> for C {
 }
 
 
-fn is_const(p: &Primitive) -> bool {
-    match p {
-        Primitive::Boolean(_) | Primitive::Float(_) | Primitive::Int(_) | Primitive::Vector(_) | Primitive::EvaluatedVector(_) => true,
-        _ => false,
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct DecisionVariable {
-    domain: Domain,
-    id: Identifier,
-}
-
-
-#[derive(Clone, Debug)]
-pub struct StochasticVariable {
-    distribution: Distribution,
-    id: Identifier,
-}
-
-
-#[derive(Clone, Debug)]
-pub enum EvalExpr {
-    C(Primitive),
-    Begin(Vec<ExpressionRef>),
-    Decision{id: Identifier, body: ExpressionRef},
-    Stochastic{id: Identifier, body: ExpressionRef},
-    If{
-        predicate: ExpressionRef,
-        consequent: ExpressionRef,
-        alternative: ExpressionRef,
-    },
-    Constrain{
-        prob: f64,
-        relation: Relation,
-        left: ExpressionRef,
-        right: ExpressionRef,
-    },
-    Builtin{
-        builtin: common::Builtin,
-        args: Vec<ExpressionRef>,
-    },
-    Distribution{
-        distribution: common::DistributionType,
-        args: Vec<ExpressionRef>,
-    },
-    Placeholder,
-    Deleted,
-}
-
-#[derive(Clone, Debug)]
-pub struct EvaluatedTree {
-    pub expressions: SmallVec<[EvalExpr; 8]>,
-}
-
-impl EvaluatedTree {
-    pub fn new() -> Self {
-        Self {
-            expressions: SmallVec::new(),
-        }
-    }
-
-    pub fn root(&self) -> ExpressionRef {
-        ExpressionRef { index: 0 }
-    }
-
-    pub fn push(&mut self, expr: EvalExpr) -> ExpressionRef {
-        let l = self.expressions.len() as u32;
-        self.expressions.push(expr);
-        ExpressionRef { index: l }
-    }
-
-    pub fn placeholder(&mut self) -> ExpressionRef {
-        let ret = self.push(EvalExpr::Placeholder);
-        // println!(" -> Creating placeholder @ {}", ret.index);
-        ret
-    }
-
-    pub fn replace(&mut self, at: ExpressionRef, with: EvalExpr) -> ExpressionRef {
-        match self.expressions[at.index as usize] {
-            EvalExpr::Placeholder => (),
-            EvalExpr::Deleted => (),
-            _ => panic!("Replacing non-placeholder value: {:?}\n -> with {:?}", &self.expressions[at.index as usize], &with)
-        };
-        // println!(" -> Replacing placeholder @ {}", at.index);
-        self.expressions[at.index as usize] = with;
-        at
-    }
-
-    fn delete(&mut self, at: ExpressionRef) {
-        self.expressions[at.index as usize] = EE::Deleted;
-    }
-
-    pub fn deref<'a>(&'a self, at: ExpressionRef) -> &EvalExpr {
-        &self.expressions[at.index as usize]
-    }
-}
 
 fn fresh(state: &mut u32) -> Identifier {
     use std::io::Write;

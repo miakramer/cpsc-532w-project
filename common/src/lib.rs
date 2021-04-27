@@ -1,9 +1,239 @@
 use lazy_static::lazy_static;
+use primitives::Primitive;
+use smallvec::SmallVec;
+use smol_str::SmolStr;
 use std::collections::HashMap;
 pub mod eqmap;
 pub mod primitives;
 pub mod distribution;
 use serde::{Serialize, Deserialize};
+
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum Relation {
+    Eq,
+    Neq,
+    Lt,
+    Gt,
+    Leq,
+    Geq,
+}
+
+impl Relation {
+    pub fn pretty_print(&self) -> &'static str {
+        match self {
+            Self::Eq => "=",
+            Self::Neq => "≠",
+            Self::Lt => "<",
+            Self::Gt => ">",
+            Self::Leq => "≤",
+            Self::Geq => "≥"
+        }
+    }
+}
+
+
+pub type Identifier = SmolStr;
+
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct ExpressionRef {
+    pub index: u32,
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum EvalExpr {
+    C(Primitive),
+    Begin(Vec<ExpressionRef>),
+    Decision{id: Identifier, body: ExpressionRef},
+    Stochastic{id: Identifier, body: ExpressionRef},
+    If{
+        predicate: ExpressionRef,
+        consequent: ExpressionRef,
+        alternative: ExpressionRef,
+    },
+    Constrain{
+        prob: f64,
+        relation: Relation,
+        left: ExpressionRef,
+        right: ExpressionRef,
+    },
+    Builtin{
+        builtin: Builtin,
+        args: Vec<ExpressionRef>,
+    },
+    Distribution{
+        distribution: DistributionType,
+        args: Vec<ExpressionRef>,
+    },
+    Placeholder,
+    Deleted,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EvaluatedTree {
+    pub expressions: SmallVec<[EvalExpr; 8]>,
+}
+
+impl EvaluatedTree {
+    pub fn new() -> Self {
+        Self {
+            expressions: SmallVec::new(),
+        }
+    }
+
+    pub fn root(&self) -> ExpressionRef {
+        ExpressionRef { index: 0 }
+    }
+
+    pub fn push(&mut self, expr: EvalExpr) -> ExpressionRef {
+        let l = self.expressions.len() as u32;
+        self.expressions.push(expr);
+        ExpressionRef { index: l }
+    }
+
+    pub fn placeholder(&mut self) -> ExpressionRef {
+        let ret = self.push(EvalExpr::Placeholder);
+        // println!(" -> Creating placeholder @ {}", ret.index);
+        ret
+    }
+
+    pub fn replace(&mut self, at: ExpressionRef, with: EvalExpr) -> ExpressionRef {
+        match self.expressions[at.index as usize] {
+            EvalExpr::Placeholder => (),
+            EvalExpr::Deleted => (),
+            _ => panic!("Replacing non-placeholder value: {:?}\n -> with {:?}", &self.expressions[at.index as usize], &with)
+        };
+        // println!(" -> Replacing placeholder @ {}", at.index);
+        self.expressions[at.index as usize] = with;
+        at
+    }
+
+    pub fn delete(&mut self, at: ExpressionRef) {
+        self.expressions[at.index as usize] = EvalExpr::Deleted;
+    }
+
+    pub fn deref<'a>(&'a self, at: ExpressionRef) -> &EvalExpr {
+        &self.expressions[at.index as usize]
+    }
+}
+
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum VariableKind {
+    Stochastic,
+    Decision,
+}
+
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VarRef {
+    pub kind: VariableKind,
+    pub id: u32
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Variable {
+    pub kind: VariableKind,
+    pub name: Identifier,
+    pub definition: EvaluatedTree,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Variables {
+    pub variables: Vec<Variable>,
+}
+
+impl Variables {
+    pub fn deref<'a>(&'a self, at: &VarRef) -> &'a Variable {
+        &self.variables[at.id as usize]
+    }
+
+    pub fn new() -> Self {
+        Self { variables: Vec::new() }
+    }
+
+    pub fn has_name(&self, ident: &Identifier) -> bool {
+        for var in &self.variables {
+            if &var.name == ident {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn get_by_name(&self, ident: &Identifier) -> Option<VarRef> {
+        for (i, var) in self.variables.iter().enumerate() {
+            if &var.name == ident {
+                return Some(VarRef{id: i as u32, kind: var.kind});
+            }
+        }
+        None
+    }
+
+    pub fn push(&mut self, kind: VariableKind, name: Identifier, definition: EvaluatedTree) -> VarRef {
+        let id = self.variables.len() as u32;
+        self.variables.push(Variable{kind, name, definition});
+        VarRef{kind, id}
+    }
+
+    pub fn get_ref(&self, of: &Variable) -> VarRef {
+        for (i, var) in self.variables.iter().enumerate() {
+            if var.name == of.name {
+                return VarRef{id: i as u32, kind: var.kind};
+            }
+        }
+        unreachable!()
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Predicate {
+    pub pred: EvaluatedTree,
+    pub negated: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Constraint {
+    pub probability: f64,
+    pub relation: Relation,
+    pub left: EvaluatedTree,
+    pub right: EvaluatedTree,
+    pub predicate: SmallVec<[Predicate; 8]>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Dependency {
+    pub this: VarRef,
+    pub depends_on: SmallVec<[VarRef; 8]>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ScpGraph {
+    pub variables: Variables,
+    pub dependencies: Vec<Dependency>,
+    pub constraints: Vec<Constraint>,
+    pub body: EvaluatedTree,
+}
+
+impl ScpGraph {
+    pub fn dependencies_of<'a>(&'a self, var: VarRef) -> &'a Dependency {
+        for d in &self.dependencies {
+            if d.this == var {
+                return d;
+            }
+        }
+        unreachable!()
+    }
+
+    pub fn get_ref(&self, of: &Variable) -> VarRef {
+        self.variables.get_ref(of)
+    }
+}
+
+
 
 lazy_static! {
     static ref BUILTINS: HashMap<&'static str, Builtin> = {
