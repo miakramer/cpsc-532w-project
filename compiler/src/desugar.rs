@@ -238,7 +238,7 @@ fn desugar_exprs_let(tree: &mut ExpressionTree<Identifier>, placeholder: Express
     if bindings.len() == 0 {
         panic!("Shouldn't happen")
     } else if bindings.len() == 1 {
-        let placeholder = tree.placeholder();
+        // let placeholder = tree.placeholder();
         let (i, e) = &bindings[0];
         let value = desugar_exprs(tree, e, procedures, name_state)?;
         let name = ident(i, name_state);

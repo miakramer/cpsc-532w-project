@@ -18,15 +18,16 @@ impl Into<Primitive> for C {
     }
 }
 
-
-
-fn fresh(state: &mut u32) -> Identifier {
+fn fresh(state: &mut u32, varkind: VariableKind) -> Identifier {
     use std::io::Write;
 
     let mut buf = [0u8; 22];
     {
         let mut br = &mut buf[..];
-        write!(br, "@{}", state).unwrap();
+        write!(br, "@{}{}", match varkind {
+            VariableKind::Stochastic => 'S',
+            VariableKind::Decision => 'D',
+        }, state).unwrap();
     }
     let mut i = 0;
     while buf[i] != 0 {
@@ -80,7 +81,7 @@ fn _partial_eval(src: &ExpressionTree<Identifier>, at: ExpressionRef, to: &mut E
         Expr::C(c) => {Ok(to.replace(placeholder, EvalExpr::C(c.clone().into())))},
         Expr::V(v) => {
             if let Some(b) = bindings.get(v) {
-                Ok(_clone_at(to, *b))
+                Ok(_clone_at(to, *b, placeholder))
             } else {
                 Err(PartialEvalErr::Undefined(v.clone()))
             }
@@ -122,12 +123,12 @@ fn _partial_eval(src: &ExpressionTree<Identifier>, at: ExpressionRef, to: &mut E
             _partial_eval(src, *body, to, &bind(bindings, name, value), name_state, Some(placeholder))
         }
         Expr::Sample(e) => {
-            let id = fresh(name_state);
+            let id = fresh(name_state, VariableKind::Stochastic);
             let body = _partial_eval(src, *e, to, bindings, name_state, None)?;
             Ok(to.replace(placeholder, EE::Stochastic{id, body}))
         }
         Expr::Decision(e) => {
-            let id = fresh(name_state);
+            let id = fresh(name_state, VariableKind::Decision);
             let body = _partial_eval(src, *e, to, bindings, name_state, None)?;
             Ok(to.replace(placeholder, EE::Decision{id, body}))
         }
@@ -207,43 +208,51 @@ fn _partial_eval(src: &ExpressionTree<Identifier>, at: ExpressionRef, to: &mut E
 
 pub type EE = EvalExpr;
 
-fn _clone_at(tree: &mut EvaluatedTree, src_at: ExpressionRef) -> ExpressionRef {
-    let placeholder = tree.placeholder();
+fn _clone_at(tree: &mut EvaluatedTree, src_at: ExpressionRef, placeholder: ExpressionRef) -> ExpressionRef {
     let copy = match tree.deref(src_at) {
         EE::C(c) => EE::C(c.clone()),
         EE::Begin(v) => {
             let mut new = v.clone();
             for expr in new.iter_mut() {
-                *expr = _clone_at(tree, *expr);
+                let inner = tree.placeholder();
+                *expr = _clone_at(tree, *expr, inner);
             }
             EE::Begin(new)
         },
         EE::Decision{id, body} => {
             let (id, body) = (id.clone(), *body);
-            EE::Decision{id, body: _clone_at(tree, body)}
+            let inner = tree.placeholder();
+            EE::Decision{id, body: _clone_at(tree, body, inner)}
         },
         EE::Stochastic{id, body} => {
             let (id, body) = (id.clone(), *body);
-            EE::Stochastic{id, body: _clone_at(tree, body)}
+            let inner = tree.placeholder();
+            EE::Stochastic{id, body: _clone_at(tree, body, inner)}
         },
         EE::If{predicate, consequent, alternative} => {
             let (predicate, consequent, alternative) = (*predicate, *consequent, *alternative);
-            let predicate = _clone_at(tree, predicate);
-            let consequent = _clone_at(tree, consequent);
-            let alternative = _clone_at(tree, alternative);
+            let inner_p = tree.placeholder();
+            let predicate = _clone_at(tree, predicate, inner_p);
+            let inner_c = tree.placeholder();
+            let consequent = _clone_at(tree, consequent, inner_c);
+            let inner_a = tree.placeholder();
+            let alternative = _clone_at(tree, alternative, inner_a);
             EE::If{predicate, consequent, alternative}
         }
         EE::Constrain{prob, relation, left, right} => {
             let (relation, left, right, prob) = (*relation, *left, *right, *prob);
-            let left = _clone_at(tree, left);
-            let right = _clone_at(tree, right);
+            let inner_l = tree.placeholder();
+            let left = _clone_at(tree, left, inner_l);
+            let inner_r = tree.placeholder();
+            let right = _clone_at(tree, right, inner_r);
             EE::Constrain{prob, relation, left, right}
         }
         EE::Builtin{builtin, args} => {
             let builtin = *builtin;
             let mut args = args.clone();
             for expr in args.iter_mut() {
-                *expr = _clone_at(tree, *expr);
+                let inner = tree.placeholder();
+                *expr = _clone_at(tree, *expr, inner);
             }
             EE::Builtin{builtin, args}
         }
@@ -251,7 +260,8 @@ fn _clone_at(tree: &mut EvaluatedTree, src_at: ExpressionRef) -> ExpressionRef {
             let distribution = *distribution;
             let mut args = args.clone();
             for expr in args.iter_mut() {
-                *expr = _clone_at(tree, *expr);
+                let inner = tree.placeholder();
+                *expr = _clone_at(tree, *expr, inner);
             }
             EE::Distribution{distribution, args}
         }
@@ -276,6 +286,9 @@ pub(crate) fn pretty_print_at(tree: &EvaluatedTree, at: ExpressionRef, indentati
     indent(indentation);
     match tree.deref(at) {
         EE::C(c) => println!("{:?}", c),
+        EE::VarRef(r) => {
+            println!("(ref {})", r);
+        }
         EE::Begin(e) => {
             println!("(begin");
             for expr in e {
