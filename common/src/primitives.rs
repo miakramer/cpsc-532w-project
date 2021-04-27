@@ -4,11 +4,17 @@ use crate::eqmap::*;
 use num_traits::*;
 use std::convert::TryFrom;
 use serde::{Serialize, Deserialize};
+use rand::prelude::*;
 
 pub type PHashMap = EqMap<Primitive, Primitive>;
 
 pub trait Support {
     fn cardinality(&self) -> usize;
+}
+
+pub trait Sample {
+    type Output;
+    fn sample(&self, rng: &mut ThreadRng) -> Self::Output;
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

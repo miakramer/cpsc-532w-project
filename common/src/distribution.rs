@@ -1,7 +1,9 @@
 use crate::*;
 use crate::primitives::*;
 use ndarray::prelude::*;
+use rand::prelude::ThreadRng;
 use std::convert::TryFrom;
+use crate::primitives;
 
 
 macro_rules! assert_num_args {
@@ -42,17 +44,81 @@ macro_rules! get_arg {
 }
 
 
-pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result<Distribution, String> {
+use rand::prelude::*;
+use rand_distr::*;
+use rand_distr::Distribution;
+
+
+impl Sample for primitives::Distribution {
+    type Output = Primitive;
+
+    fn sample(&self, rng: &mut ThreadRng) -> Primitive {
+        match self {
+            Self::Dirac{center} => Primitive::from(*center),
+            Self::Kronecker{center} => Primitive::from(*center),
+            Self::UniformDiscrete{a, b} => {
+                Primitive::from(Uniform::from(*a..*b).sample(rng))
+            }
+            Self::Categorical{weights} => {
+                let l = weights.len();
+
+                if cfg!(debug_assertions) {
+                    print!("Sampling (categorical {:?})…", weights.as_slice());
+                }
+
+                let val = rng.gen::<f32>();
+                let mut ssf = 0.0;
+                for (i, x) in weights.iter().enumerate() {
+                    ssf += x;
+                    if val <= ssf {
+                        if cfg!(debug_assertions) { println!("  -> result: {}", i); }
+                        return Primitive::from(i);
+                    }
+                }
+                Primitive::from(l - 1) // rounding error
+            }
+            Self::MappedCategorical{weights, values} => {
+                let l = weights.len();
+
+                if cfg!(debug_assertions) {
+                    print!("Sampling (categorical {:?})…", weights.as_slice());
+                }
+
+                let val = rng.gen::<f32>();
+                let mut ssf = 0.0;
+                let mut res = -1;
+                for (i, x) in weights.iter().enumerate() {
+                    ssf += x;
+                    if val <= ssf {
+                        if cfg!(debug_assertions) { println!("  -> result: {}", i); }
+                        res = i as i128;
+                    }
+                }
+                if res == -1 {
+                    res = (l - 1) as i128;
+                }
+                values[res as usize].clone()
+            }
+            Self::Bernoulli{p} => {
+                Primitive::from(rng.gen::<f64>() <= *p)
+            }
+            _ => todo!()
+        }
+    }
+}
+
+
+pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result<primitives::Distribution, String> {
     match dtype {
         DistributionType::Dirac => {
             assert_num_args!("(dirac center)", args, 1);
             get_arg!(center, &args[0], number, "(dirac center) requries `center` numeric.");
-            Ok(Distribution::Dirac{center})
+            Ok(primitives::Distribution::Dirac{center})
         }
         DistributionType::Kronecker => {
             assert_num_args!("(kronecker center)", args, 1);
             get_arg!(center, &args[0], integral, "(kronecker center) requries `center` integral.");
-            Ok(Distribution::Kronecker{center})
+            Ok(primitives::Distribution::Kronecker{center})
         }
         DistributionType::UniformContinuous => {
             assert_num_args!("(uniform-continuous a b)", args, 2);
@@ -63,7 +129,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
                 return Err(String::from("(uniform-continuous a b) requires a <= b."));
             }
 
-            Ok(Distribution::UniformContinuous{a, b})
+            Ok(primitives::Distribution::UniformContinuous{a, b})
         }
         DistributionType::UniformDiscrete => {
             assert_num_args!("(uniform-continuous a b)", args, 2);
@@ -74,7 +140,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
                 return Err(String::from("(uniform-discrete a b) requires a <= b."));
             }
 
-            Ok(Distribution::UniformDiscrete{a, b})
+            Ok(primitives::Distribution::UniformDiscrete{a, b})
         }
         DistributionType::Categorical => {
             assert_num_args!("(categorical weights)", args, 1);
@@ -84,7 +150,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             if weights.iter().any(|x| *x < 0.0) {
                 Err("(categorical weights): all weights must be positive".into())
             } else {
-                Ok(Distribution::Categorical{weights})
+                Ok(primitives::Distribution::Categorical{weights})
             }
         }
         DistributionType::MappedCategorical => {
@@ -98,7 +164,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             } else if weights.len() != values.len() {
                 Err("(map-categorical weights values): values and weights must have the same length".into())
             } else {
-                Ok(Distribution::MappedCategorical{weights, values})
+                Ok(primitives::Distribution::MappedCategorical{weights, values})
             }
         }
         DistributionType::Normal => {
@@ -108,7 +174,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             if sigma <= 0. {
                 Err("(normal mu sigma) requires `sigma` > 0".into())
             } else {
-                Ok(Distribution::Normal{mu, sigma})
+                Ok(primitives::Distribution::Normal{mu, sigma})
             }
         }
         DistributionType::Cauchy => {
@@ -118,7 +184,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             if scale <= 0. {
                 Err("(cauchy median scale) requires `scale` > 0".into())
             } else {
-                Ok(Distribution::Cauchy{median, scale})
+                Ok(primitives::Distribution::Cauchy{median, scale})
             }
         }
         DistributionType::Beta => {
@@ -128,7 +194,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             if alpha <= 0. || beta <= 0. {
                 Err("(beta α β) requires all parameters > 0".into())
             } else {
-                Ok(Distribution::Beta{alpha, beta})
+                Ok(primitives::Distribution::Beta{alpha, beta})
             }
         }
         DistributionType::Dirichlet => {
@@ -140,7 +206,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
                 Err("(dirichlet weights) requires weights to sum to 1".into())
             } else {
                 let weights = Array1::<f32>::from_iter(weights.iter().copied());
-                Ok(Distribution::Dirichlet{weights})
+                Ok(primitives::Distribution::Dirichlet{weights})
             }
         }
         DistributionType::Exponential => {
@@ -149,7 +215,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             if lambda <= 0. {
                 Err("(exponential λ) requires `λ` positive".into())
             } else {
-                Ok(Distribution::Exponential{lambda})
+                Ok(primitives::Distribution::Exponential{lambda})
             }
         }
         DistributionType::Gamma => {
@@ -159,7 +225,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             if shape <= 0. || rate <= 0. {
                 Err("(gamma shape rate) requires `shape` and `rate` positive.".into())
             } else {
-                Ok(Distribution::Gamma{shape, rate})
+                Ok(primitives::Distribution::Gamma{shape, rate})
             }
         }
         DistributionType::Bernoulli => {
@@ -168,7 +234,7 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             if p < 0.  ||  p > 1. {
                 Err("(bernoulli p) requires p to be a probability".into())
             } else {
-                Ok(Distribution::Bernoulli{p})
+                Ok(primitives::Distribution::Bernoulli{p})
             }
         }
         DistributionType::Binomial => {
@@ -180,8 +246,123 @@ pub fn build_distribution(dtype: DistributionType, args: &[Primitive]) -> Result
             } else if n < 0 {
                 Err("(binomial n p) requires n nonnegative.".into())
             } else {
-                Ok(Distribution::Binomial{n: n as u64, p})
+                Ok(primitives::Distribution::Binomial{n: n as u64, p})
             }
         }
     }
 }
+
+
+
+
+// pub fn sample_distribution(
+//     distribution: &crate::primitives::Distribution, rng: &mut ThreadRng,
+// ) -> Result<Primitive, String> {
+//     let args = &distribution.arguments[..];
+//     match distribution.distribution {
+//         DistributionType::Dirac => {
+//             check_params!((dirac center) from args);
+//             Ok(Primitive::from(center))
+//         }
+//         DistributionType::Kronecker => {
+//             check_params!((kronecker center) from args);
+//             Ok(Primitive::from(center))
+//         }
+//         DistributionType::UniformContinuous => {
+//             check_params!((uniform-continuous a b) from args);
+//             Ok(Primitive::from(Uniform::from(a..b).sample(rng)))
+//         }
+//         DistributionType::UniformDiscrete => {
+//             check_params!((uniform-discrete a b) from args);
+//             Ok(Primitive::from(Uniform::from(a..b).sample(rng)))
+//         }
+//         DistributionType::Categorical => {
+//             check_params!((categorical weights) from args);
+//             let l = weights.len();
+
+//             if cfg!(debug_assertions) {
+//                 print!("Sampling (categorical {:?})…", weights.as_slice());
+//             }
+
+//             let val = rng.gen::<f64>();
+//             let mut ssf = 0.0;
+//             for (i, x) in weights.iter().enumerate() {
+//                 ssf += x;
+//                 if val <= ssf {
+//                     if cfg!(debug_assertions) { println!("  -> result: {}", i); }
+//                     return Ok(Primitive::from(i));
+//                 }
+//             }
+//             if cfg!(debug_assertions) { println!("  -> result: {}", l - 1); }
+//             Ok(Primitive::from(l - 1)) // rounding error
+//         }
+//         // DistributionType::LogCategorical => {
+//         //     check_params!((categorical-logit logits) from args);
+//         //     let mut logits = logits;
+//         //     // normalize
+//         //     let norm = logsumexp(&logits);
+//         //     logits -= norm;
+//         //     // convert to probabilities
+//         //     logits.mapv_inplace(|f| f.exp());
+//         //     let norm = logits.sum();
+//         //     logits /= norm;
+//         //     let weights = logits;
+//         //     // sample
+//         //     let l = weights.len();
+//         //     let val = rng.gen::<f32>();
+//         //     let mut ssf: f32 = 0.0;
+//         //     for (i, x) in weights.iter().enumerate() {
+//         //         ssf += x;
+//         //         if val <= ssf {
+//         //             return Primitive::from(i);
+//         //         }
+//         //     }
+//         //     return Primitive::from(l - 1); // rounding error
+//         // }
+//         DistributionType::Normal => {
+//             check_params!((normal mu sigma) from args);
+//             Ok(Primitive::from(Normal::new(mu, sigma).unwrap().sample(rng)))
+//         }
+//         // DistributionType::NormalStar => {
+//         //     check_params!((normal mu sigma) from args);
+//         //     let sigma = (sigma.exp() + 1.).ln();
+//         //     Primitive::from(Normal::new(mu, sigma).unwrap().sample(rng))
+//         // }
+//         DistributionType::Cauchy => {
+//             check_params!((cauchy median scale) from args);
+//             Ok(Primitive::from(Cauchy::new(median, scale).unwrap().sample(rng)))
+//         }
+//         DistributionType::Beta => {
+//             check_params!((beta alpha beta) from args);
+//             Ok(Primitive::from(Beta::new(alpha, beta).unwrap().sample(rng)))
+//         }
+//         DistributionType::Dirichlet => {
+//             check_params!((dirichlet weights) from args);
+//             Ok(Primitive::from(
+//                 Dirichlet::new(weights.as_slice().unwrap())
+//                     .unwrap()
+//                     .sample(rng)))
+//         }
+//         DistributionType::Exponential => {
+//             check_params!((exponential lambda) from args);
+//             Ok(Primitive::from(Exp::new(lambda).unwrap().sample(rng)))
+//         }
+//         DistributionType::Gamma => {
+//             check_params!((gamma shape rate) from args);
+//             Ok(Primitive::from(Gamma::new(shape, 1.0/rate).unwrap().sample(rng)))
+//         }
+//         // DistributionType::GammaStar => {
+//         //     check_params!((gamma shape rate) from args);
+//         //     let rate = (rate.exp() + 1.0).ln();
+//         //     Primitive::from(Gamma::new(shape, 1.0/rate).unwrap().sample(rng))
+//         // }
+//         DistributionType::Bernoulli => {
+//             check_params!((bernoulli p) from args);
+//             Ok(Primitive::from(rng.gen::<f64>() <= p))
+//         }
+//         DistributionType::Binomial => {
+//             check_params!((binomial n p) from args);
+//             Ok(Primitive::from(Binomial::new(n as u64, p).unwrap().sample(rng) as i128))
+//         }
+//     }
+// }

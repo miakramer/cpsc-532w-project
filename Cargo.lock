@@ -92,6 +92,8 @@ dependencies = [
  "lazy_static",
  "ndarray",
  "num-traits",
+ "rand",
+ "rand_distr",
  "serde",
 ]
 
