@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use primitives::Primitive;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroU32};
 pub mod eqmap;
 pub mod primitives;
 pub mod distribution;
@@ -48,6 +48,7 @@ pub enum EvalExpr {
     Begin(Vec<ExpressionRef>),
     Decision{id: Identifier, body: ExpressionRef},
     Stochastic{id: Identifier, body: ExpressionRef},
+    VarRef(Identifier),
     If{
         predicate: ExpressionRef,
         consequent: ExpressionRef,
@@ -128,9 +129,18 @@ pub enum VariableKind {
 
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GroupId {
+    None,
+    Group,
+    At(u32)
+}
+
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VarRef {
     pub kind: VariableKind,
-    pub id: u32
+    pub id: u32,
+    pub group_id: GroupId,
 }
 
 
@@ -142,12 +152,66 @@ pub struct Variable {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VariableGroup {
+    pub kind: VariableKind,
+    pub group_name: Identifier,
+    pub names: SmallVec<[Identifier; 4]>,
+    pub definition: EvaluatedTree,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum VariableOrGroup {
+    Variable(Variable),
+    Group(VariableGroup),
+}
+
+impl VariableOrGroup {
+    pub fn name<'a>(&'a self) -> &'a Identifier {
+        match self {
+            Self::Variable(v) => &v.name,
+            Self::Group(g) => &g.group_name,
+        }
+    }
+
+    pub fn kind(&self) -> VariableKind {
+        match self {
+            Self::Variable(v) => v.kind,
+            Self::Group(g) => g.kind,
+        }
+    }
+
+    pub fn definition<'a>(&'a self) -> &'a EvaluatedTree {
+        match self {
+            Self::Variable(v) => &v.definition,
+            Self::Group(g) => &g.definition,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Variables {
-    pub variables: Vec<Variable>,
+    pub variables: Vec<VariableOrGroup>,
 }
 
 impl Variables {
-    pub fn deref<'a>(&'a self, at: &VarRef) -> &'a Variable {
+    pub fn iter<'a>(&'a self) -> VariablesIter<'a> {
+        VariablesIter { index: 0, variables: self }
+    }
+
+    pub fn iter_group<'a>(&'a self, r: VarRef) -> Option<VariableGroupIter<'a>> {
+        match self.deref_group(r) {
+            VariableOrGroup::Group(g) => {
+                Some(VariableGroupIter{id: r.id, index: 0, group: g})
+            }
+            _ => None
+        }
+    }
+
+    pub fn name<'a>(&'a self, r: VarRef) -> &'a Identifier {
+        self.deref_group(r).name()
+    }
+
+    pub fn deref_group<'a>(&'a self, at: VarRef) -> &'a VariableOrGroup {
         &self.variables[at.id as usize]
     }
 
@@ -157,8 +221,17 @@ impl Variables {
 
     pub fn has_name(&self, ident: &Identifier) -> bool {
         for var in &self.variables {
-            if &var.name == ident {
-                return true;
+            match var {
+                VariableOrGroup::Variable(v) => {
+                    if &v.name == ident {
+                        return true;
+                    }
+                }
+                VariableOrGroup::Group(g) => {
+                    if g.names.contains(ident) || &g.group_name == ident {
+                        return true;
+                    }
+                }
             }
         }
         false
@@ -166,8 +239,22 @@ impl Variables {
 
     pub fn get_by_name(&self, ident: &Identifier) -> Option<VarRef> {
         for (i, var) in self.variables.iter().enumerate() {
-            if &var.name == ident {
-                return Some(VarRef{id: i as u32, kind: var.kind});
+            match var {
+                VariableOrGroup::Variable(v) => {
+                    if &v.name == ident {
+                        return Some(VarRef{id: i as u32, kind: v.kind, group_id: GroupId::None});
+                    }
+                },
+                VariableOrGroup::Group(g) => {
+                    if &g.group_name == ident {
+                        return Some(VarRef{id: i as u32, kind: g.kind, group_id: GroupId::Group});
+                    }
+                    for (j, v_ident) in g.names.iter().enumerate() {
+                        if v_ident == ident {
+                            return Some(VarRef{id: i as u32, kind: g.kind, group_id: GroupId::At(j as u32)})
+                        }
+                    }
+                }
             }
         }
         None
@@ -175,19 +262,70 @@ impl Variables {
 
     pub fn push(&mut self, kind: VariableKind, name: Identifier, definition: EvaluatedTree) -> VarRef {
         let id = self.variables.len() as u32;
-        self.variables.push(Variable{kind, name, definition});
-        VarRef{kind, id}
-    }
-
-    pub fn get_ref(&self, of: &Variable) -> VarRef {
-        for (i, var) in self.variables.iter().enumerate() {
-            if var.name == of.name {
-                return VarRef{id: i as u32, kind: var.kind};
-            }
-        }
-        unreachable!()
+        self.variables.push(VariableOrGroup::Variable(Variable{kind, name, definition}));
+        VarRef{kind, id, group_id: GroupId::None}
     }
 }
+
+pub struct VariablesIter<'a> {
+    variables: &'a Variables,
+    index: usize,
+}
+
+impl<'a> Iterator for VariablesIter<'a> {
+    type Item = VarRef;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ret = if self.index >= self.variables.variables.len() {
+            None
+        } else {
+            match &self.variables.variables[self.index] {
+                VariableOrGroup::Variable(i) => {
+                    Some(VarRef{id: self.index as u32, kind: i.kind, group_id: GroupId::None})
+                }
+                VariableOrGroup::Group(i) => {
+                    Some(VarRef{id: self.index as u32, kind: i.kind, group_id: GroupId::Group})
+                }
+            }
+        };
+        self.index += 1;
+        ret
+    }
+}
+
+impl<'a> ExactSizeIterator for VariablesIter<'a> {
+    fn len(&self) -> usize {
+        self.variables.variables.len()
+    }
+}
+
+
+pub struct VariableGroupIter<'a> {
+    group: &'a VariableGroup,
+    id: u32,
+    index: usize,
+}
+
+impl<'a> Iterator for VariableGroupIter<'a> {
+    type Item = VarRef;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ret = if self.index >= self.group.names.len() {
+            None
+        } else {
+            Some(VarRef{id: self.id, kind: self.group.kind, group_id: GroupId::At(self.index as u32)})
+        };
+        self.index += 1;
+        ret
+    }
+}
+
+impl <'a> ExactSizeIterator for VariableGroupIter<'a> {
+    fn len(&self) -> usize {
+        self.group.names.len()
+    }
+}
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Predicate {
@@ -219,17 +357,17 @@ pub struct ScpGraph {
 }
 
 impl ScpGraph {
-    pub fn dependencies_of<'a>(&'a self, var: VarRef) -> &'a Dependency {
+    pub fn dependencies_of<'a>(&'a self, var: VarRef) -> Option<&'a Dependency> {
         for d in &self.dependencies {
             if d.this == var {
-                return d;
+                if d.depends_on.len() == 0 {
+                    return None;
+                } else {
+                    return Some(d);
+                }
             }
         }
-        unreachable!()
-    }
-
-    pub fn get_ref(&self, of: &Variable) -> VarRef {
-        self.variables.get_ref(of)
+        None
     }
 }
 
@@ -302,6 +440,8 @@ lazy_static! {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum Builtin {
+    Nil,
+
     OneOf,
     IntRange,
 

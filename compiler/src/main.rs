@@ -55,6 +55,8 @@ pub fn main() {
 
     let t1 = now();
 
+    // println!("{:?}", parsed.body);
+
     let desugared = match desugar::desugar(&parsed) {
         Ok(d) => d,
         Err(e) => {
@@ -66,6 +68,7 @@ pub fn main() {
     let t2 = now();
 
     println!("\n    Desugared:\n");
+    // println!("{:?}", desugared.body);
     desugar::pretty_print(&desugared.body);
 
     let t3 = now();
@@ -99,14 +102,15 @@ pub fn main() {
 
     println!("\n    Partially evaluated:\n");
 
+    // println!("{:?}", &evald);
     partial_eval::pretty_print(&evald);
 
     
     let t5 = now();
-    let g = graph::compile_graph(evald);
+    let g = graph::compile_graph(&evald);
     let t6 = now();
 
-    println!("\n    Graph:\n");
+    println!("\n==============\n    Graph:\n==============\n");
     graph::pretty_print(&g);
 
     println!("\nParsing took {:?}", t1.duration_since(t0));

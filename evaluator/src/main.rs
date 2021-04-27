@@ -4,7 +4,7 @@ mod utilities;
 
 use common::*;
 
-// mod q;
+mod q;
 
 fn main() {
     use std::time::Instant;
