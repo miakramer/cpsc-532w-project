@@ -51,6 +51,7 @@ lazy_static! {
         distributions.insert("dirac", DistributionType::Dirac);
         distributions.insert("kronecker", DistributionType::Kronecker);
         distributions.insert("uniform-continuous", DistributionType::UniformContinuous);
+        distributions.insert("uniform-discrete", DistributionType::UniformDiscrete);
         distributions.insert("uniform", DistributionType::UniformContinuous);
         distributions.insert("categorical", DistributionType::Categorical);
         distributions.insert("normal", DistributionType::Normal);

@@ -96,7 +96,16 @@ pub fn main() {
 
     partial_eval::pretty_print(&evald);
 
+    
+    let t5 = now();
+    let g = graph::compile_graph(&evald);
+    let t6 = now();
+
+    println!("\n    Graph:\n");
+    graph::pretty_print(&g);
+
     println!("\nParsing took {:?}", t1.duration_since(t0));
     println!("Desugaring took {:?}", t2.duration_since(t1));
     println!("Partial evaluation took {:?}", t4.duration_since(t3));
+    println!("Graph compilation took: {:?}", t6.duration_since(t5));
 }

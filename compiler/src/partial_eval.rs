@@ -298,7 +298,7 @@ fn _partial_eval(src: &ExpressionTree<Identifier>, at: ExpressionRef, to: &mut E
     }
 }
 
-type EE = EvalExpr;
+pub type EE = EvalExpr;
 
 fn _clone_at(tree: &mut EvaluatedTree, src_at: ExpressionRef) -> ExpressionRef {
     let placeholder = tree.placeholder();
@@ -365,7 +365,7 @@ fn indent(indentation: usize) {
     print!("{}", String::from_iter(repeat(' ').take(indentation * 2)))
 }
 
-fn pretty_print_at(tree: &EvaluatedTree, at: ExpressionRef, indentation: usize) {
+pub(crate) fn pretty_print_at(tree: &EvaluatedTree, at: ExpressionRef, indentation: usize) {
     indent(indentation);
     match tree.deref(at) {
         EE::C(c) => println!("{:?}", c),
