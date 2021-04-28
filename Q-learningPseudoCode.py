@@ -81,17 +81,18 @@ def max_x(Q,D_combos,L_D(m+1),S_combos,L_S(m),s):
 
     return q_max
 
-def reward(C,x,s):
+def reward(C,Obj,x,s):
     """ returns 0 if at least one constraint is NOT satisfied, else if ALL constraints are satisfied it returns the value of the objective function """
     for c in C: #loop through all constraints in C
         if c(x,s) not satisfied: 
             return 0 # returns 0 if at least one constraint isn't satisfied
-    return 1 # returns 1 if all the stage-relevant constraints are satisfied
+    return Obj(x,s) # returns 1 if all the stage-relevant constraints are satisfied
 
 while n <= N:
     qhat = 0
     while m <= M:
         Cm = subset of the constraints C that only depend on variables from stage m or earlier (list?)
+        Objm = the objective function for stage m
         sm = []
         for s in L_S(m):
             sm.append(sample(s)) # poor notation, but basically says store sampled values of all active stochastic variables in sm_t
@@ -107,11 +108,8 @@ while n <= N:
         s[active stochastic variables] = sm # store the stochastic variables for this stage
         
         # now x_t is fully defined
-        qhat = qhat + reward(Cm,xm,sm) + gamma * max_x(Q0,D_combos,L_D(m+1),S_combos,L_S(m),sm))
+        qhat = qhat + reward(Cm,Objm,xm,sm) + gamma * max_x(Q0,D_combos,L_D(m+1),S_combos,L_S(m),sm))
         m = m+1
-
-    # update qhat to contain information about objective from final assignment of decision and stochastic variables
-    qhat = qhat + Obj(x,s)
 
     # update Q:
     decision_ind = find index in D_combos corresponding to combo of decision variable values in x
