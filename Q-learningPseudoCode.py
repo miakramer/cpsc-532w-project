@@ -21,6 +21,34 @@ def random_x(L_D(m)):
         x_random.append(x[i]) # i.e. pick i'th possible value x can take on as the random choice of x
     return x_random
 
+def stage_arg_max(Q, partial_assignment, s, x):
+    """ Given the active stochastic variables s, what assignment of the active decision variables has the maximum value, return this assignment"""
+    # for example, say we have decision variables x1,x2,x3 and stochastic variables s1,s2. In stage 1, we only have access to x1 and s1
+    # s = ['s1'], x = ['x1'] - tells us the names of the variables we have access to
+    # partial assignment stores the value assigned to a variable, lets say we sampled s1 = a -> partial_assignment(x1,x2,x3,s1,s2) = (none,none,none,a,none)
+    # we want to find all previously defined entries in Q corresponding to (Any,Any,Any,Specific(a),Any), and the corresponding tuple inputs
+    # let's say we find x1 has potential assignments {2,5}, 
+    # then we want to sum the value of all assignments of the form (Specific(2),Any,Any,Specific(a),Any), let this be v1
+    # and sum the values of all assignments of the form (Specific(5),Any,Any,Specific(a),Any), let this be v2
+    # then, return 2 if v1>v2, else return 5
+
+    previously_assigned = retrieve from Q everything corresponding to partial_assignment # with the None in the partial assignment replaced with Any (as above)
+    # ^ returns a list of tuples like [(Specific(2),Any,Any,Specific(a),Any),(Specific(5),Any,Any,Specific(a),Any)] from above
+    prev_x_assignments = retrieve from previously_assigned all possible groupings of assignments of variables in x 
+    prev_partial_asssignments = union of prev_x_assignments with partial_assignment 
+
+    v0 = 0
+    for assignment in prev_partial_assignments:
+        in assignment set all none to Any
+        v1 = sum of all values in Q corresponding to the partial assignment 'assignment'
+        if v1 > v0:
+            x_assignment = values in assignment corresponding to variables in x
+            v0 <- v1 
+
+    return x_assignment # should be the assignment of x variables corresponding to the largest value in Q
+
+
+
 def stage_argmax_x(Q0,D_combos,L_D(m),S_combos,L_S(m),s):
     """ returns the combination of decision variable values of the active decision variables corresponding to the maximum Q0 value given the sampling of stochastic variables s_t """
     # Q0 indicates the previous iterations' Q
@@ -48,7 +76,7 @@ def stage_argmax_x(Q0,D_combos,L_D(m),S_combos,L_S(m),s):
 
     # compute argmax
     s_ind = find index in Sm_combos corresponding to the combination of sampled values of our active stochastic variables s
-    ind_max = find index of max value of Qm[s_ind,:] # search the row corresponding to s_t_ind for the max value
+    ind_max = find index of max value of Qm[s_ind,:] # search the row corresponding to s_ind for the max value
 
     return Dm_combos[ind_max] # returns the values of the decision vars corresponding to the max entry in Qm
 
@@ -118,5 +146,3 @@ while n <= N:
 
     update Q0 = Q1
     n = n+1
-
-
