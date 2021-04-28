@@ -1,4 +1,3 @@
-pub use crate::parser::{ProclaimThreshold, C};
 pub use crate::partial_eval::*;
 use common::*;
 
@@ -10,7 +9,7 @@ use smallvec::SmallVec;
 pub fn compile_graph(body: &EvaluatedTree) -> ScpGraph {
     let mut variables = Variables::new();
     gather_variables(&body, body.root(), &mut variables);
-    make_groups(&mut variables);
+    // make_groups(&mut variables);
 
     let mut dependencies = Vec::new();
     gather_dependencies(&variables, &mut dependencies);
@@ -49,127 +48,127 @@ fn dependency<'a>(variables: &Variables, dependencies: &'a mut Vec<Dependency>, 
     None
 }
 
-fn make_groups(variables: &mut Variables) {
-    let refs: Vec<VarRef> = variables.iter().collect();
-    for var in refs {
-        make_group(variables, var);
-    }
-}
+// fn make_groups(variables: &mut Variables) {
+//     let refs: Vec<VarRef> = variables.iter().collect();
+//     for var in refs {
+//         make_group(variables, var);
+//     }
+// }
 
-fn make_group(variables: &mut Variables, var: VarRef) -> bool {
-    let definition = variables.deref_group(var).definition();
-    let name = variables.name(var);
-    let kind = variables.deref_group(var).kind();
+// fn make_group(variables: &mut Variables, var: VarRef) -> bool {
+//     let definition = variables.deref_group(var).definition();
+//     let name = variables.name(var);
+//     let kind = variables.deref_group(var).kind();
 
-    let root = definition.deref(definition.root());
+//     let root = definition.deref(definition.root());
 
-    if let EE::C(_) = root {
-        return false;
-    }
-    else if let EE::Distribution{distribution: _, args: _} = root {
-        return false;
-    }
-    else if let EE::Builtin{builtin, args: _} = root {
-        match builtin {
-            Builtin::IntRange | Builtin::OneOf => {
-                return false;
-            },
-            _ => {
-                panic!("Can't yet invert control for {:?}", builtin);
-            }
-        }
-    }
-    else {
-        let mut new = EvaluatedTree::new();
-        let mut name_state = 0;
-        let mut new_names: SmallVec<[Identifier; 4]> = SmallVec::new();
-        let mut new_name = || -> Identifier {
-            let ret: Identifier = format!("{}:{}", name, name_state).into();
-            name_state += 1;
-            new_names.push(ret.clone());
-            ret
-        };
-        invert_control(definition, &mut new, definition.root(), &mut new_name);
+//     if let EE::C(_) = root {
+//         return false;
+//     }
+//     else if let EE::Distribution{distribution: _, args: _} = root {
+//         return false;
+//     }
+//     else if let EE::Builtin{builtin, args: _} = root {
+//         match builtin {
+//             Builtin::IntRange | Builtin::OneOf => {
+//                 return false;
+//             },
+//             _ => {
+//                 panic!("Can't yet invert control for {:?}", builtin);
+//             }
+//         }
+//     }
+//     else {
+//         let mut new = EvaluatedTree::new();
+//         let mut name_state = 0;
+//         let mut new_names: SmallVec<[Identifier; 4]> = SmallVec::new();
+//         let mut new_name = || -> Identifier {
+//             let ret: Identifier = format!("{}:{}", name, name_state).into();
+//             name_state += 1;
+//             new_names.push(ret.clone());
+//             ret
+//         };
+//         invert_control(definition, &mut new, definition.root(), &mut new_name);
 
-        drop(definition);
-        let name = name.clone();
+//         drop(definition);
+//         let name = name.clone();
 
-        variables.variables[var.id as usize] = VariableOrGroup::Group(
-            VariableGroup {
-                kind,
-                group_name: name,
-                names: new_names,
-                definition: new,
-            }
-        );
+//         variables.variables[var.id as usize] = VariableOrGroup::Group(
+//             VariableGroup {
+//                 kind,
+//                 group_name: name,
+//                 names: new_names,
+//                 definition: new,
+//             }
+//         );
 
-        true
-    }
-}
+//         true
+//     }
+// }
 
-fn invert_control<F>(tree: &EvaluatedTree, to: &mut EvaluatedTree, at: ExpressionRef, new_name: &mut F)  -> ExpressionRef
-    where F : FnMut() -> Identifier  {
-    let placeholder = to.placeholder();
+// fn invert_control<F>(tree: &EvaluatedTree, to: &mut EvaluatedTree, at: ExpressionRef, new_name: &mut F)  -> ExpressionRef
+//     where F : FnMut() -> Identifier  {
+//     let placeholder = to.placeholder();
 
-    match tree.deref(at) {
-        EE::C(c) => match c {
-            Primitive::Distribution(_) => {
-                let body = to.push(EE::C(c.clone()));
-                to.replace(placeholder, EE::Stochastic{id: new_name(), body})
-            },
-            Primitive::Domain(_) => {
-                let body = to.push(EE::C(c.clone()));
-                to.replace(placeholder, EE::Decision{id: new_name(), body})
-            },
-            _ => to.replace(placeholder, EE::C(c.clone()))
-        },
-        EE::If{predicate, consequent, alternative} => {
-            let predicate = invert_control(tree, to, *predicate, new_name);
-            let consequent = invert_control(tree, to, *consequent, new_name);
-            let alternative = invert_control(tree, to, *alternative, new_name);
-            to.replace(placeholder, EE::If{predicate, consequent, alternative})
-        }
-        EE::Decision{id, body} => {
-            let id = id.clone();
-            let body = clone(tree, to, *body);
-            to.replace(placeholder, EE::Decision{id, body})
-        }
-        EE::Stochastic{id, body} => {
-            let id = id.clone();
-            let body = clone(tree, to, *body);
-            to.replace(placeholder, EE::Decision{id, body})
-        }
-        EE::Constrain{prob, relation, left, right} => {
-            let left = clone(tree, to, *left);
-            let right = clone(tree, to, *right);
-            to.replace(placeholder, EE::Constrain{prob: *prob, relation: *relation, left, right})
-        }
-        EE::Builtin{builtin, args} => {
-            let mut new_args = Vec::with_capacity(args.len());
-            for arg in args {
-                new_args.push(clone(tree, to, *arg));
-            }
-            match builtin {
-                Builtin::IntRange | Builtin::OneOf => {
-                    let body = to.push(EE::Builtin{builtin: *builtin, args: new_args});
-                    to.replace(placeholder, EE::Decision{id: new_name(), body})
-                },
-                _ => {
-                    to.replace(placeholder, EE::Builtin{builtin: *builtin, args: new_args})
-                }
-            }
-        }
-        EE::Distribution{distribution, args} => {
-            let mut new_args = Vec::with_capacity(args.len());
-            for arg in args {
-                new_args.push(clone(tree, to, *arg));
-            }
-            let body = to.push(EE::Distribution{distribution: *distribution, args: new_args});
-            to.replace(placeholder, EE::Stochastic{id: new_name(), body})
-        }
-        _ => todo!()
-    }
-}
+//     match tree.deref(at) {
+//         EE::C(c) => match c {
+//             Primitive::Distribution(_) => {
+//                 let body = to.push(EE::C(c.clone()));
+//                 to.replace(placeholder, EE::Stochastic{id: new_name(), body})
+//             },
+//             Primitive::Domain(_) => {
+//                 let body = to.push(EE::C(c.clone()));
+//                 to.replace(placeholder, EE::Decision{id: new_name(), body})
+//             },
+//             _ => to.replace(placeholder, EE::C(c.clone()))
+//         },
+//         EE::If{predicate, consequent, alternative} => {
+//             let predicate = invert_control(tree, to, *predicate, new_name);
+//             let consequent = invert_control(tree, to, *consequent, new_name);
+//             let alternative = invert_control(tree, to, *alternative, new_name);
+//             to.replace(placeholder, EE::If{predicate, consequent, alternative})
+//         }
+//         EE::Decision{id, body} => {
+//             let id = id.clone();
+//             let body = clone(tree, to, *body);
+//             to.replace(placeholder, EE::Decision{id, body})
+//         }
+//         EE::Stochastic{id, body} => {
+//             let id = id.clone();
+//             let body = clone(tree, to, *body);
+//             to.replace(placeholder, EE::Decision{id, body})
+//         }
+//         EE::Constrain{prob, relation, left, right} => {
+//             let left = clone(tree, to, *left);
+//             let right = clone(tree, to, *right);
+//             to.replace(placeholder, EE::Constrain{prob: *prob, relation: *relation, left, right})
+//         }
+//         EE::Builtin{builtin, args} => {
+//             let mut new_args = Vec::with_capacity(args.len());
+//             for arg in args {
+//                 new_args.push(clone(tree, to, *arg));
+//             }
+//             match builtin {
+//                 Builtin::IntRange | Builtin::OneOf => {
+//                     let body = to.push(EE::Builtin{builtin: *builtin, args: new_args});
+//                     to.replace(placeholder, EE::Decision{id: new_name(), body})
+//                 },
+//                 _ => {
+//                     to.replace(placeholder, EE::Builtin{builtin: *builtin, args: new_args})
+//                 }
+//             }
+//         }
+//         EE::Distribution{distribution, args} => {
+//             let mut new_args = Vec::with_capacity(args.len());
+//             for arg in args {
+//                 new_args.push(clone(tree, to, *arg));
+//             }
+//             let body = to.push(EE::Distribution{distribution: *distribution, args: new_args});
+//             to.replace(placeholder, EE::Stochastic{id: new_name(), body})
+//         }
+//         _ => todo!()
+//     }
+// }
 
 fn gather_variables(evald: &EvaluatedTree, at: ExpressionRef, variables: &mut Variables) {
     match evald.deref(at) {
@@ -328,13 +327,12 @@ fn clone_refs(from: &EvaluatedTree, to: &mut EvaluatedTree, src_at: ExpressionRe
 fn gather_dependencies(variables: &Variables, dependencies: &mut Vec<Dependency>) {
     for (i, var) in variables.variables.iter().enumerate() {
         let mut refs: SmallVec<[VarRef; 8]> = SmallVec::new();
-        gather_dependencies_at(&var.definition(), var.definition().root(), variables, &var.name(), &mut refs);
+        gather_dependencies_at(&var.definition, var.definition.root(), variables, &var.name, &mut refs);
         if refs.len() > 0 {
             dependencies.push(Dependency{
                 this: VarRef{
-                    kind: var.kind(),
+                    kind: var.kind,
                     id: i as u32,
-                    group_id: GroupId::None,
                 },
                 depends_on: refs
             })
@@ -344,7 +342,7 @@ fn gather_dependencies(variables: &Variables, dependencies: &mut Vec<Dependency>
 
 fn hasref(refs: &[VarRef], variables: &Variables, name: &Identifier) -> bool {
     for r in refs {
-        if variables.deref_group(*r).name() == name {
+        if &variables.deref(*r).name == name {
             return true;
         }
     }
@@ -464,42 +462,39 @@ fn gather_constraints(tree: &EvaluatedTree, at: ExpressionRef, variables: &Varia
 pub fn pretty_print(graph: &ScpGraph) {
     println!("Variables:");
     for var in graph.variables.iter() {
-        match graph.variables.deref_group(var) {
-            VariableOrGroup::Variable(v) => {
-                println!("• {}, {:?}", v.name, v.kind);
-                
-                if let Some(d) = graph.dependencies_of(var) {
-                    print!("  → depends on:");
-                    for r in &d.depends_on {
-                        let d = graph.variables.deref_group(*r);
-                        print!(" {}", &d.name());
-                    }
-                    println!();
-                }
-                
-                println!("  → definition:");
-                pretty_print_at(&v.definition, v.definition.root(), 2);
+        let v = graph.variables.deref(var);
+        println!("• {}, {:?}", &v.name, var.kind);
+        
+        if let Some(d) = graph.dependencies_of(var) {
+            print!("  → depends on:");
+            for r in &d.depends_on {
+                let d = graph.variables.deref(*r);
+                print!(" {}", &d.name);
             }
-            VariableOrGroup::Group(g) => {
-                print!("• Group {} ( ", g.group_name);
-                for (i, _v) in graph.variables.iter_group(var).unwrap().enumerate() {
-                    print!("{} ", g.names[i]);
-                }
-                println!("), {:?}", g.kind);
-
-                if let Some(d) = graph.dependencies_of(var) {
-                    print!("  → depends on:");
-                    for r in &d.depends_on {
-                        let d = graph.variables.deref_group(*r);
-                        print!(" {}", &d.name());
-                    }
-                    println!();
-                }
-
-                println!("  → definition:");
-                pretty_print_at(&g.definition, g.definition.root(), 2);
-            }
+            println!();
         }
+        
+        println!("  → definition:");
+        pretty_print_at(&v.definition, v.definition.root(), 2);
+            // VariableOrGroup::Group(g) => {
+            //     print!("• Group {} ( ", g.group_name);
+            //     for (i, _v) in graph.variables.iter_group(var).unwrap().enumerate() {
+            //         print!("{} ", g.names[i]);
+            //     }
+            //     println!("), {:?}", g.kind);
+
+            //     if let Some(d) = graph.dependencies_of(var) {
+            //         print!("  → depends on:");
+            //         for r in &d.depends_on {
+            //             let d = graph.variables.deref_group(*r);
+            //             print!(" {}", &d.name());
+            //         }
+            //         println!();
+            //     }
+
+            //     println!("  → definition:");
+            //     pretty_print_at(&g.definition, g.definition.root(), 2);
+            // }
     }
 
     println!("\nConstraints:");

@@ -1,6 +1,7 @@
 use nom::{IResult, branch::*, bytes::complete::tag, character::complete::*, combinator::*, error::{VerboseError, context}, multi::{many0, many1}, sequence::*};
 use smol_str::SmolStr;
 use common::*;
+
 /* utilities */
 
 // fn comment(i: &str) -> IResult<&str, (), VerboseError<&str>> {
@@ -20,13 +21,6 @@ use common::*;
 // }
 
 /* c */
-
-#[derive(Clone, Copy, Debug)]
-pub enum C {
-    Float(f64),
-    Int(i128),
-    Bool(bool),
-}
 
 pub fn decimal(input: &str) -> IResult<&str, &str, VerboseError<&str>> {
     recognize(many1(one_of("0123456789")))(input)

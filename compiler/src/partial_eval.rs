@@ -1,6 +1,5 @@
 
 
-pub use crate::parser::{ProclaimThreshold, C};
 pub use crate::desugar::*;
 use common::{*, primitives::*, distribution::build_distribution};
 
@@ -8,15 +7,6 @@ mod eval;
 use eval::*;
 
 
-impl Into<Primitive> for C {
-    fn into(self) -> Primitive {
-        match self {
-            C::Bool(b) => Primitive::Boolean(b),
-            C::Int(i) => Primitive::Int(i),
-            C::Float(f) => Primitive::Float(f),
-        }
-    }
-}
 
 fn fresh(state: &mut u32, varkind: VariableKind) -> Identifier {
     use std::io::Write;

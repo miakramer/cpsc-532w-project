@@ -8,8 +8,20 @@ use rand::prelude::*;
 
 pub type PHashMap = EqMap<Primitive, Primitive>;
 
+
+impl Into<Primitive> for crate::C {
+    fn into(self) -> Primitive {
+        match self {
+            Self::Bool(b) => Primitive::Boolean(b),
+            Self::Int(i) => Primitive::Int(i),
+            Self::Float(f) => Primitive::Float(f),
+        }
+    }
+}
+
 pub trait Support {
     fn cardinality(&self) -> usize;
+    fn nth(&self, n: usize) -> Primitive;
 }
 
 pub trait Sample {
@@ -48,6 +60,33 @@ impl Support for Distribution {
             _ => todo!()
         }
     }
+
+    fn nth(&self, n: usize) -> Primitive {
+        if n >= self.cardinality() {
+            panic!("n={} out of range for {:?}", n, self);
+        }
+        match self {
+            Self::Dirac{center} => {
+                Primitive::from(*center)
+            }
+            Self::Kronecker{center} => {
+                Primitive::from(*center)
+            }
+            Self::UniformDiscrete{a, b: _} => {
+                Primitive::from(*a + (n as i128))
+            }
+            Self::Categorical{weights: _} => {
+                Primitive::from(n)
+            }
+            Self::MappedCategorical{weights: _, values} => {
+                values[n].clone()
+            }
+            Self::Bernoulli{p: _} => {
+                Primitive::from(n != 0)
+            }
+            _ => unimplemented!()
+        }
+    }
 }
 
 
@@ -63,6 +102,18 @@ impl Support for Domain {
         match self {
             Self::OneOf(v) => v.len(),
             Self::IntRange(a, b) => (b - a) as usize,
+        }
+    }
+
+    fn nth(&self, n: usize) -> Primitive {
+        if n >= self.cardinality() {
+            panic!("n={} out of range for {:?}", n, self);
+        }
+        match self {
+            Self::OneOf(v) => v[n].clone(),
+            Self::IntRange(a, _b) => {
+                Primitive::from(*a + (n as i128))
+            }
         }
     }
 }
